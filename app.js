@@ -190,9 +190,11 @@ function defaultWaypointFields(e = {}) {
 
 // Canonical key matching walkie's tasks.skills.locations._norm:
 // lowercase, runs of space/hyphen -> single underscore, drop non-word chars.
+// The strip uses Unicode \w (\p{L}\p{N}_) like Python's re, so non-ASCII names
+// ("Café") survive identically on both sides instead of diverging to "caf".
 function canon(s) {
   return String(s == null ? '' : s).trim().toLowerCase()
-    .replace(/[\s\-]+/g, '_').replace(/[^\w]/g, '');
+    .replace(/[\s\-]+/g, '_').replace(/[^\p{L}\p{N}_]/gu, '');
 }
 
 function dateStamp() {
@@ -217,11 +219,17 @@ function buildExportFiles(prefix) {
 
 async function exportAll() {
   if (!state.meta) return;
-  const issues = validateWorld();
-  if (issues.length && !confirm(
-    `world.toml has ${issues.length} issue(s) — affected places will be dropped on the robot:\n\n`
-    + issues.map(s => '• ' + s).join('\n') + '\n\nExport anyway?')) {
-    status(`export cancelled — ${issues.length} world.toml issue(s)`);
+  const { errors, warnings } = validateWorld();
+  if (errors.length) {  // fatal: the file wouldn't parse at all — block, don't offer "anyway"
+    alert(`Can't export — world.toml would be invalid and the robot would load NO map:\n\n`
+      + errors.map(s => '• ' + s).join('\n') + `\n\nRename the colliding entries and export again.`);
+    status(`export blocked — ${errors.length} fatal world.toml issue(s)`);
+    return;
+  }
+  if (warnings.length && !confirm(
+    `world.toml has ${warnings.length} warning(s) — affected places may be dropped on the robot:\n\n`
+    + warnings.map(s => '• ' + s).join('\n') + '\n\nExport anyway?')) {
+    status(`export cancelled — ${warnings.length} world.toml warning(s)`);
     return;
   }
   const prefix = ($('#prefix-input').value || 'map').replace(/[^\w\-]/g, '_');
@@ -292,8 +300,16 @@ function fmtNum(n) {
   // up to 4 decimals, trailing zeros trimmed, kept as a float-looking literal
   return v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '.0');
 }
+const _TOML_CTRL = { '\b': '\\b', '\t': '\\t', '\n': '\\n', '\f': '\\f', '\r': '\\r' };
+const _TOML_CTRL_RE = /[\u0000-\u001f\u007f]/g;
 function tomlStr(s) {
-  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  // TOML basic string: escape \ and ", plus every control char (a raw newline
+  // is an "Illegal character" that makes the whole file unparsable).
+  return '"' + String(s)
+    .replace(/[\\"]/g, c => '\\' + c)
+    .replace(_TOML_CTRL_RE, c => _TOML_CTRL[c]
+      || '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0').toUpperCase())
+    + '"';
 }
 function tomlKey(s) { return /^[A-Za-z0-9_-]+$/.test(s) ? s : tomlStr(s); }
 function tomlStrArray(arr) { return '[' + arr.map(tomlStr).join(', ') + ']'; }
@@ -361,23 +377,65 @@ function buildWorldTomlFrom(elements, vocab) {
 
 function buildWorldToml() { return buildWorldTomlFrom(state.elements, state.vocab); }
 
-// Pre-export checks mirroring walkie's silent-drop rules, so a mistake shows
-// here (in the editor) not as a "my location vanished" on the robot.
-function validateWorld() {
-  const issues = [];
-  const wps = state.elements.filter(e => e.type === 'waypoint' && (e.role === 'room' || e.role === 'location'));
-  const roomNames = new Set(
-    state.elements.filter(e => e.type === 'waypoint' && e.role === 'room' && canon(e.name)).map(e => canon(e.name)));
-  const seen = new Map();
-  for (const e of wps) {
+function validateWorld() { return worldIssuesFrom(state.elements, state.vocab); }
+
+// Pre-export checks (pure, so window._test can exercise it). Splits issues into:
+//   errors   — make the TOML unparsable (duplicate table/key from canon-collision);
+//              export MUST block, since a half-written file loses the WHOLE arena.
+//   warnings — droppable/advisory (location -> absent room, no name, shadowing,
+//              non-finite pose); export may proceed after a confirm.
+function worldIssuesFrom(elements, vocab) {
+  const errors = [], warnings = [];
+  const rooms = elements.filter(e => e.type === 'waypoint' && e.role === 'room');
+  const locs = elements.filter(e => e.type === 'waypoint' && e.role === 'location');
+
+  // canon-collision within a namespace => duplicate [rooms.x]/[locations.x] header.
+  const keysOf = (items, what) => {
+    const seen = new Map();
+    for (const e of items) {
+      const nm = canon(e.name);
+      if (!nm) { warnings.push(`a ${e.role} (#${e.id}) has no name — it won't be exported`); continue; }
+      if (seen.has(nm)) errors.push(`two ${what} normalize to "${nm}" (#${seen.get(nm)} + #${e.id}) — duplicate [${what}.${nm}] makes world.toml unparsable; rename one`);
+      else seen.set(nm, e.id);
+    }
+    return seen;
+  };
+  const roomKeys = keysOf(rooms, 'rooms');
+  const locKeys = keysOf(locs, 'locations');
+
+  // vocab canon-collisions => duplicate key / [gestures.x] header.
+  const dupVocab = (table, what) => {
+    const seen = new Map();
+    for (const raw of Object.keys(table || {})) {
+      const k = canon(raw);
+      if (!k) continue;
+      if (seen.has(k)) errors.push(`${what} "${seen.get(k)}" and "${raw}" normalize to "${k}" — duplicate key makes world.toml unparsable; rename one`);
+      else seen.set(k, raw);
+    }
+  };
+  dupVocab(vocab && vocab.object_categories, 'object categories');
+  dupVocab(vocab && vocab.gestures, 'gestures');
+
+  // warnings: a location pointing at a room that won't exist on the robot.
+  // roomNames excludes present=false rooms (walkie drops them, then cascade-drops
+  // any location referencing them).
+  const presentRooms = new Set(rooms.filter(e => e.present !== false && canon(e.name)).map(e => canon(e.name)));
+  for (const e of locs) {
     const nm = canon(e.name);
-    if (!nm) { issues.push(`${e.role} #${e.id} has no name`); continue; }
-    if (seen.has(nm)) issues.push(`duplicate name "${nm}" (#${seen.get(nm)} and #${e.id})`);
-    else seen.set(nm, e.id);
-    if (e.role === 'location' && canon(e.room) && !roomNames.has(canon(e.room)))
-      issues.push(`location "${nm}" references unknown room "${canon(e.room)}" (will be dropped)`);
+    if (nm && canon(e.room) && !presentRooms.has(canon(e.room)))
+      warnings.push(`location "${nm}" points at room "${canon(e.room)}", which isn't a present room — the robot will drop it`);
   }
-  return issues;
+  // a name used by both a room and a location: valid TOML (separate tables), but
+  // the robot resolves location-first, so the room becomes unreachable by name.
+  for (const nm of locKeys.keys())
+    if (roomKeys.has(nm)) warnings.push(`"${nm}" is both a room and a location — the location will shadow the room when the robot resolves that name`);
+
+  // a non-finite pose would be silently written as 0 by fmtNum — surface it.
+  for (const e of [...rooms, ...locs]) {
+    if (!poseOf(e).every(Number.isFinite))
+      warnings.push(`${e.role} "${canon(e.name) || ('#' + e.id)}" has a non-finite pose — it will export as 0`);
+  }
+  return { errors, warnings };
 }
 
 // ───── arena vocabulary (parse/serialize the textarea blocks) ───────
@@ -894,7 +952,10 @@ canvas.addEventListener('wheel', (ev) => {
 }, { passive: false });
 
 window.addEventListener('keydown', (ev) => {
-  if (ev.target.tagName === 'INPUT') return;
+  // Don't hijack keys (Backspace/Delete -> deleteElement, Ctrl+Z -> undo) while
+  // the user is typing in any form control — incl. the vocab <textarea>s and the
+  // inspector role/room <select>s, not just <input>.
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(ev.target.tagName) || ev.target.isContentEditable) return;
   if (ev.key === 'Escape') {
     if (state.drawing) {
       if (state.drawing.type === 'rect' || state.drawing.type === 'waypoint') { state.drawing = null; draw(); }
@@ -1042,7 +1103,10 @@ function rebuildElemList() {
     li.appendChild(main); li.appendChild(actions);
 
     li.onclick = (ev) => { if (ev.target.closest('.acts')) return; state.selected = e.id; rebuildElemList(); rebuildInspector(); draw(); };
-    li.ondblclick = (ev) => {
+    // Waypoints are renamed via the inspector (their label mirrors `name`), so the
+    // dblclick label-editor is wired only for the drawing kinds it actually owns —
+    // otherwise its blur would no-op in renameElement and strand the input in the DOM.
+    if (e.type !== 'waypoint') li.ondblclick = (ev) => {
       if (ev.target.closest('.acts')) return;
       const input = document.createElement('input');
       input.value = e.label; input.size = 12;
@@ -1166,7 +1230,11 @@ function rebuildInspector() {
   };
   const commit = (patch) => {
     updateElementFields(el.id, patch);
-    rebuildElemList(); rebuildVisibility(); rebuildInspector(); draw();
+    // Only `name` (mutates the list label + filter sets) and `role` (changes which
+    // fields render) need a full rebuild; other fields just redraw — which also
+    // keeps focus in the field being edited instead of tearing down the DOM.
+    if ('name' in patch || 'role' in patch) { rebuildElemList(); rebuildVisibility(); rebuildInspector(); }
+    draw();
   };
 
   const roleSel = document.createElement('select');
@@ -1375,6 +1443,24 @@ window._test = function () {
   console.assert(parseNames('Charlie, Alex\nRobin').length === 3, 'parseNames');
   const gs = parseGestures('waving: a, b\npointing');
   console.assert(gs.waving.length === 2 && gs.pointing.length === 0, 'parseGestures');
+
+  // canon parity with Python _norm: Unicode letters survive
+  console.assert(canon('Café') === 'café', 'canon keeps unicode letters, got ' + canon('Café'));
+  // tomlStr escapes a control char rather than emitting it raw
+  console.assert(tomlStr('a\nb') === '"a\\nb"', 'tomlStr escapes newline, got ' + tomlStr('a\nb'));
+
+  // validation: clean world has no fatal errors; canon-collisions are errors
+  console.assert(worldIssuesFrom([wpRoom, wpLoc], vocab).errors.length === 0, 'clean world: no errors');
+  console.assert(worldIssuesFrom([], { object_categories: { Drinks: ['a'], drinks: ['b'] }, names: [], gestures: {} }).errors.length === 1, 'colliding categories -> error');
+  const dupRooms = [
+    { type: 'waypoint', role: 'room', name: 'Kitchen', coords: [[0, 0]], heading: 0, present: true },
+    { type: 'waypoint', role: 'room', name: 'kitchen', coords: [[1, 1]], heading: 0, present: true }];
+  console.assert(worldIssuesFrom(dupRooms, {}).errors.length === 1, 'colliding room names -> error');
+  // location -> present=false room is a warning (cascade-dropped on the robot)
+  const absentRoomCase = [
+    { type: 'waypoint', role: 'room', name: 'pantry', coords: [[0, 0]], heading: 0, present: false },
+    { type: 'waypoint', role: 'location', name: 'pantry_shelf', room: 'pantry', coords: [[1, 1]], heading: 0, present: true }];
+  console.assert(worldIssuesFrom(absentRoomCase, {}).warnings.some(w => /pantry_shelf/.test(w)), 'location->absent room warned');
 
   console.log('self-check ok');
 };

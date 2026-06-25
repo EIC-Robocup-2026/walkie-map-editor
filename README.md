@@ -135,9 +135,13 @@ writes six files into it:
 | `<prefix>_keepout.pgm` | white image with all no-go and `asNogo` areas filled black |
 | `<prefix>_world.toml` | named waypoints + vocab for `walkie-agent-v2` (see below) |
 
-Before writing, the editor checks the `world.toml` data (missing/duplicate
-names, a location pointing at an unknown room) and, if anything would be
-silently dropped on the robot, lists it and asks to confirm.
+Before writing, the editor validates the `world.toml` data. Issues that would
+make the file unparsable — two names that normalize to the same key (e.g.
+`Kitchen`/`kitchen`, `soft drinks`/`soft-drinks`), in waypoints or vocab —
+**block** the export, because a duplicate table/key makes the robot load *no*
+map at all. Softer issues (a nameless place, a location pointing at an unknown
+room, a name shared by a room and a location) are listed as warnings you can
+confirm through.
 
 Re-import the exported subfolder to round-trip — element geometry, waypoint
 fields, and arena vocab are all preserved.
@@ -192,8 +196,9 @@ aliases = ["waving person"]
   `names` keep their human casing.
 - `heading` is **radians**, REP-103 (`0` = +x / map east, CCW positive). The
   editor stores radians; the inspector shows degrees for convenience.
-- `present = false` and a location whose `room` is missing are **dropped**
-  by the robot — the pre-export check warns about the latter.
+- `present = false` drops a place. `room` is optional — a location with no
+  room is kept; only a location pointing at an **unknown / absent** room is
+  cascade-dropped, and the pre-export check warns about that case.
 
 ## `_element.json` format
 
