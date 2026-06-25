@@ -9,6 +9,15 @@ const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', nogo: 'n
 // Default heading-arrow length on screen (px); world direction, y-flipped to canvas.
 const WAYPOINT_ARROW_PX = 26;
 
+// Inspector combo-box suggestions. The name/category inputs stay FREE TEXT (GPSR
+// names arbitrary arena places), but these surface the load-bearing challenge-
+// contract names (docs/MAP_LOCATIONS.md) so they're picked, not mistyped.
+const SUGGEST_ROOM_NAMES = ['kitchen', 'living_room', 'bedroom', 'office', 'dining_room', 'hallway', 'bathroom'];
+const SUGGEST_LOCATION_NAMES = ['dining_table', 'kitchen_bar', 'dishwasher', 'cabinet', 'trash_bin',
+  'breakfast_surface', 'extra_surface', 'laundry_area', 'laundry_basket', 'folding_table',
+  'washing_machine', 'entrance_door'];
+const SUGGEST_CATEGORIES = ['table', 'shelf', 'cabinet', 'counter', 'bin', 'sofa', 'chair', 'bed', 'sink', 'door', 'appliance', 'rack'];
+
 const state = {
   meta: null,
   w: 0, h: 0,
@@ -1206,6 +1215,16 @@ function roomWaypointNames() {
     .map(e => canon(e.name)))].sort();
 }
 
+// Populate a <datalist> (combo-box suggestions) — dedup, preserve order.
+function fillDatalist(id, values) {
+  const dl = $('#' + id);
+  if (!dl) return;
+  while (dl.firstChild) dl.removeChild(dl.firstChild);
+  for (const v of [...new Set(values)]) {
+    const o = document.createElement('option'); o.value = v; dl.appendChild(o);
+  }
+}
+
 function rebuildInspector() {
   const root = $('#inspector');
   if (!root) return;
@@ -1247,6 +1266,11 @@ function rebuildInspector() {
 
   const nameIn = document.createElement('input');
   nameIn.type = 'text'; nameIn.value = el.name || ''; nameIn.placeholder = 'kitchen_table';
+  nameIn.setAttribute('list', 'wp-name-options');  // combo: suggest contract names, still free text
+  fillDatalist('wp-name-options',
+    el.role === 'room' ? SUGGEST_ROOM_NAMES
+      : el.role === 'location' ? SUGGEST_LOCATION_NAMES
+      : [...SUGGEST_ROOM_NAMES, ...SUGGEST_LOCATION_NAMES]);
   nameIn.onchange = () => { const nm = canon(nameIn.value); commit({ name: nm, label: nm || 'waypoint' }); };
   field('name', nameIn);
 
@@ -1263,6 +1287,8 @@ function rebuildInspector() {
 
     const catIn = document.createElement('input');
     catIn.type = 'text'; catIn.value = el.category || ''; catIn.placeholder = 'table';
+    catIn.setAttribute('list', 'wp-cat-options');
+    fillDatalist('wp-cat-options', [...new Set([...SUGGEST_CATEGORIES, ...state.labels])]);
     catIn.onchange = () => commit({ category: canon(catIn.value) });
     field('category', catIn);
 

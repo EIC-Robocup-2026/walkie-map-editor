@@ -75,14 +75,17 @@ A dashed rubber-band line follows the cursor while drawing.
 A waypoint stores a full pose `(x, y, heading)`. Select it (Select tool or the
 sidebar list) and fill the **Waypoint** inspector in the sidebar:
 
-- **role** — `room`, `location`, or `(not exported)`. Only `room`/`location`
-  waypoints land in `world.toml`.
+- **role** — dropdown: `room`, `location`, or `(not exported)`. Only
+  `room`/`location` waypoints land in `world.toml`.
 - **name** — the canonical id (auto-snake_cased, e.g. `kitchen_table`); must be
-  unique.
+  unique. The box is a **combo**: it suggests the challenge-contract names
+  (role-aware — room names vs location names) so you pick them instead of
+  mistyping, but you can still type any name (GPSR arena places are arbitrary).
 - **room** (locations only) — dropdown of your room waypoints, so the
   location→room link can never dangle.
-- **category** / **placement** (locations only), **aliases**, **barrier**,
-  **present** — see the [schema](#worldtoml--walkie-agent-v2-map).
+- **category** (locations only) — combo suggesting common categories + your
+  existing labels. **placement** / **aliases** / **barrier** / **present** —
+  see the [schema](#worldtoml--walkie-agent-v2-map).
 - **heading °** — edit the facing angle numerically (degrees) if dragging
   wasn't precise enough.
 
