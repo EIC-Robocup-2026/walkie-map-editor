@@ -91,6 +91,18 @@ sidebar list) and fill the **Waypoint** inspector in the sidebar:
 
 Re-aim a committed waypoint by re-drawing it with the Waypoint tool.
 
+**Arena vocabulary (GPSR)** — a sidebar panel of structured row editors for the
+non-spatial nouns GPSR grounds against:
+
+- **Object categories** — each row is a category name + a comma-separated object
+  list (e.g. `drinks` → `cola, water, milk`). The name box suggests common
+  RoboCup categories.
+- **Names** — one person name per row.
+- **Gestures** — each row is a gesture name + comma-separated aliases.
+
+Click **+** to add a row, **×** to remove one. Empty rows are ignored on export.
+These round-trip through `_element.json` so re-exporting never loses them.
+
 **Viewport**
 
 - Mouse wheel — zoom at cursor

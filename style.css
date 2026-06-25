@@ -87,11 +87,14 @@ ul.help code { background: #1a1a1a; padding: 0 4px; border-radius: 2px; color: #
 .vocab-help { color: #888; font-size: 11px; margin-bottom: 4px; line-height: 1.4; }
 .vocab-lbl { color: #999; margin-top: 6px; display: block; }
 .vocab-lbl code { background: #1a1a1a; padding: 0 4px; border-radius: 2px; color: #bbb; }
-.vocab-block textarea {
-  background: #1e1e1e; color: #ddd; border: 1px solid #555; border-radius: 3px;
-  padding: 4px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
-  width: 100%; resize: vertical;
-}
+.vlist { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.vrow { display: flex; gap: 4px; align-items: center; }
+.vrow input { min-width: 0; font-size: 11px; padding: 3px 5px; }
+.vrow input.vk { flex: 0 0 38%; }
+.vrow input.vv { flex: 1; }
+.vrow .vx { flex: 0 0 auto; color: #999; line-height: 1; }
+.vrow .vx:hover { color: #f44; border-color: #f44; }
+.vadd { align-self: flex-start; color: #9bb; }
 
 @media (max-width: 900px) {
   #side { width: 220px; }

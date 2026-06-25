@@ -75,13 +75,13 @@
     <details>
       <summary>Arena vocabulary <span class="count">— GPSR</span></summary>
       <div class="vocab-block">
-        <div class="vocab-help">Non-spatial nouns for world.toml — object categories, person names, gestures.</div>
-        <label class="vocab-lbl">Object categories <span class="muted"><code>category: a, b, c</code> per line</span></label>
-        <textarea id="vocab-categories" rows="4" placeholder="drinks: cola, water, milk&#10;snacks: chips, biscuits"></textarea>
-        <label class="vocab-lbl">Names <span class="muted">comma / newline separated</span></label>
-        <textarea id="vocab-names" rows="2" placeholder="Charlie, Alex, Robin"></textarea>
-        <label class="vocab-lbl">Gestures <span class="muted"><code>gesture: alias1, alias2</code></span></label>
-        <textarea id="vocab-gestures" rows="3" placeholder="waving: waving person&#10;raising left arm"></textarea>
+        <div class="vocab-help">Non-spatial nouns for world.toml — object categories, person names, gestures. Add a row, then fill the comma-separated list.</div>
+        <label class="vocab-lbl">Object categories <span class="muted">name + objects</span></label>
+        <div id="vocab-categories" class="vlist"></div>
+        <label class="vocab-lbl">Names</label>
+        <div id="vocab-names" class="vlist"></div>
+        <label class="vocab-lbl">Gestures <span class="muted">name + aliases</span></label>
+        <div id="vocab-gestures" class="vlist"></div>
       </div>
     </details>
 
@@ -115,9 +115,11 @@
 
 <div id="status"></div>
 
-<!-- combo-box suggestions for the waypoint inspector (populated by app.js) -->
+<!-- combo-box suggestions (populated by app.js) -->
 <datalist id="wp-name-options"></datalist>
 <datalist id="wp-cat-options"></datalist>
+<datalist id="wp-objcat-options"></datalist>
+<datalist id="wp-gesture-options"></datalist>
 
 <script src="app.js"></script>
 </body>
