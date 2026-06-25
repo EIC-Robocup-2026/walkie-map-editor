@@ -11,7 +11,7 @@
     <label class="btn" title="Pick a folder containing map.pgm + map.yaml">Load folder
       <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
     </label>
-    <button id="export-btn" disabled title="Export 5 files into a new dated subfolder">Export</button>
+    <button id="export-btn" disabled title="Export Nav2 files + world.toml into a new dated subfolder">Export</button>
     <input id="prefix-input" placeholder="prefix" size="12" title="File name prefix used on export">
   </div>
 
@@ -34,6 +34,11 @@
     <button data-tool="nogo" title="Closed polygon rasterized into _keepout.pgm">No-Go</button>
     <select id="label-select" title="Label for the next shape"></select>
     <button id="add-label" title="Add a custom label">+</button>
+  </div>
+
+  <div class="grp" data-group="map">
+    <span class="lbl">Map</span>
+    <button data-tool="waypoint" title="Place a named room/location for world.toml; drag to set the robot's heading">Waypoint</button>
   </div>
 
   <div class="grp">
@@ -63,6 +68,24 @@
     </details>
 
     <details open>
+      <summary>Waypoint <span class="count">— world.toml place</span></summary>
+      <div id="inspector"></div>
+    </details>
+
+    <details>
+      <summary>Arena vocabulary <span class="count">— GPSR</span></summary>
+      <div class="vocab-block">
+        <div class="vocab-help">Non-spatial nouns for world.toml — object categories, person names, gestures.</div>
+        <label class="vocab-lbl">Object categories <span class="muted"><code>category: a, b, c</code> per line</span></label>
+        <textarea id="vocab-categories" rows="4" placeholder="drinks: cola, water, milk&#10;snacks: chips, biscuits"></textarea>
+        <label class="vocab-lbl">Names <span class="muted">comma / newline separated</span></label>
+        <textarea id="vocab-names" rows="2" placeholder="Charlie, Alex, Robin"></textarea>
+        <label class="vocab-lbl">Gestures <span class="muted"><code>gesture: alias1, alias2</code></span></label>
+        <textarea id="vocab-gestures" rows="3" placeholder="waving: waving person&#10;raising left arm"></textarea>
+      </div>
+    </details>
+
+    <details open>
       <summary>Filter — Label</summary>
       <div id="filter-labels" class="filter-block"></div>
     </details>
@@ -78,7 +101,8 @@
         <li>Wheel: zoom at cursor</li>
         <li>Middle / Alt / Ctrl + drag: pan</li>
         <li>Polygon / No-Go: click vertices, click near start to close</li>
-        <li>Esc: cancel current polygon</li>
+        <li>Waypoint: click to place, drag to aim heading; set role/name in the sidebar</li>
+        <li>Esc: cancel current polygon / waypoint</li>
         <li>Select tool: click on element to highlight</li>
         <li>Double-click sidebar item to rename label</li>
         <li>Sidebar <code>nogo</code> button: mask closed shape into keepout</li>

@@ -5,7 +5,9 @@
 
 const DEFAULT_LABELS = ['table', 'shelf', 'chair', 'sofa', 'tv', 'food', 'drink'];
 const FREE = 254, OCC = 0;
-const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', nogo: 'no-go' };
+const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', nogo: 'no-go', waypoint: 'waypoint' };
+// Default heading-arrow length on screen (px); world direction, y-flipped to canvas.
+const WAYPOINT_ARROW_PX = 26;
 
 const state = {
   meta: null,
@@ -15,6 +17,8 @@ const state = {
   prefix: 'map',
   elements: [],
   labels: DEFAULT_LABELS.slice(),
+  // Non-spatial arena vocabulary for walkie-agent-v2's GPSR world.toml.
+  vocab: { object_categories: {}, names: [], gestures: {} },
   selected: null,
   tool: 'pen',
   brush: 3,
@@ -120,6 +124,8 @@ async function loadFolder(files) {
   state.elements = [];
   state.hiddenLabels.clear();
   state.hiddenKinds.clear();
+  state.vocab = { object_categories: {}, names: [], gestures: {} };
+  state.selected = null;
   let loadedCount = 0;
   if (elemJson) {
     try {
@@ -129,6 +135,7 @@ async function loadFolder(files) {
       if (Array.isArray(j.labels)) {
         for (const l of j.labels) if (typeof l === 'string' && !state.labels.includes(l)) state.labels.push(l);
       }
+      if (j.vocab) state.vocab = normalizeVocab(j.vocab);  // preserve hand-entered GPSR vocab on round-trip
     } catch (e) { console.warn('bad element json', e); }
   }
   // advance nextId past any loaded ids
@@ -142,6 +149,8 @@ async function loadFolder(files) {
   rebuildLabelSelect();
   rebuildElemList();
   rebuildVisibility();
+  rebuildInspector();
+  rebuildVocabUI();
   renderPixels();
   fitView();
   updateInfo();
@@ -151,7 +160,7 @@ async function loadFolder(files) {
 }
 
 function normalizeElement(e) {
-  return {
+  const base = {
     id: e.id || `e${nextId++}`,
     label: e.label || 'unknown',
     type: e.type || 'polygon',
@@ -159,6 +168,33 @@ function normalizeElement(e) {
     asNogo: !!e.asNogo,
     coords: Array.isArray(e.coords) ? e.coords.map(c => [+c[0], +c[1]]) : [],
   };
+  if (base.type === 'waypoint') Object.assign(base, defaultWaypointFields(e));
+  return base;
+}
+
+// Semantic fields a waypoint carries on top of its position, for world.toml.
+// role '' = not exported; 'room'/'location' map to [rooms.*]/[locations.*].
+function defaultWaypointFields(e = {}) {
+  return {
+    heading: Number.isFinite(+e.heading) ? +e.heading : 0,   // radians, map frame
+    role: e.role === 'room' || e.role === 'location' ? e.role : '',
+    name: typeof e.name === 'string' ? e.name : '',
+    room: typeof e.room === 'string' ? e.room : '',           // location -> its room (canonical)
+    category: typeof e.category === 'string' ? e.category : '',
+    aliases: Array.isArray(e.aliases) ? e.aliases.map(String) : [],
+    placement: !!e.placement,
+    barrier: !!e.barrier,
+    present: e.present === undefined ? true : !!e.present,
+  };
+}
+
+// Canonical key matching walkie's tasks.skills.locations._norm:
+// lowercase, runs of space/hyphen -> single underscore, drop non-word chars.
+// The strip uses Unicode \w (\p{L}\p{N}_) like Python's re, so non-ASCII names
+// ("Café") survive identically on both sides instead of diverging to "caf".
+function canon(s) {
+  return String(s == null ? '' : s).trim().toLowerCase()
+    .replace(/[\s\-]+/g, '_').replace(/[^\p{L}\p{N}_]/gu, '');
 }
 
 function dateStamp() {
@@ -169,18 +205,33 @@ function dateStamp() {
 
 function buildExportFiles(prefix) {
   const meta = { ...state.meta, image: `${prefix}.pgm` };
+  const enc = new TextEncoder();
   return [
     [`${prefix}_og.pgm`, writePGM(state.w, state.h, state.original)],
     [`${prefix}.pgm`, writePGM(state.w, state.h, state.pixels)],
-    [`${prefix}.yaml`, new TextEncoder().encode(writeYAML(meta))],
+    [`${prefix}.yaml`, enc.encode(writeYAML(meta))],
     [`${prefix}_element.json`,
-      new TextEncoder().encode(JSON.stringify({ labels: state.labels, elements: state.elements }, null, 2))],
+      enc.encode(JSON.stringify({ labels: state.labels, elements: state.elements, vocab: state.vocab }, null, 2))],
     [`${prefix}_keepout.pgm`, writePGM(state.w, state.h, buildKeepout())],
+    [`${prefix}_world.toml`, enc.encode(buildWorldToml())],
   ];
 }
 
 async function exportAll() {
   if (!state.meta) return;
+  const { errors, warnings } = validateWorld();
+  if (errors.length) {  // fatal: the file wouldn't parse at all — block, don't offer "anyway"
+    alert(`Can't export — world.toml would be invalid and the robot would load NO map:\n\n`
+      + errors.map(s => '• ' + s).join('\n') + `\n\nRename the colliding entries and export again.`);
+    status(`export blocked — ${errors.length} fatal world.toml issue(s)`);
+    return;
+  }
+  if (warnings.length && !confirm(
+    `world.toml has ${warnings.length} warning(s) — affected places may be dropped on the robot:\n\n`
+    + warnings.map(s => '• ' + s).join('\n') + '\n\nExport anyway?')) {
+    status(`export cancelled — ${warnings.length} world.toml warning(s)`);
+    return;
+  }
   const prefix = ($('#prefix-input').value || 'map').replace(/[^\w\-]/g, '_');
   const folderName = `${prefix}_${dateStamp()}`;
   const files = buildExportFiles(prefix);
@@ -206,11 +257,12 @@ async function exportAll() {
   // Fallback: individual downloads, name-prefixed so user can group manually
   for (const [name, bytes] of files) {
     const type = name.endsWith('.json') ? 'application/json'
-      : name.endsWith('.yaml') ? 'text/yaml' : 'application/octet-stream';
+      : name.endsWith('.yaml') ? 'text/yaml'
+      : name.endsWith('.toml') ? 'text/plain' : 'application/octet-stream';
     download(`${folderName}__${name}`, bytes, type);
   }
   state.dirty = false;
-  status(`exported 5 files (prefixed ${folderName}__)`);
+  status(`exported ${files.length} files (prefixed ${folderName}__)`);
 }
 
 function buildKeepout() {
@@ -235,6 +287,197 @@ function download(name, bytes, type) {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ───── world.toml export (walkie-agent-v2 contract) ─────────────────
+// Serializes named waypoints -> [rooms.*]/[locations.*] and the arena
+// vocabulary -> [object_categories]/names/[gestures], matching the schema
+// parsed by walkie-agent-v2 (tasks/skills/locations.py + tasks/GPSR/world.py).
+
+function fmtNum(n) {
+  const v = +n;
+  if (!Number.isFinite(v)) return '0.0';
+  // up to 4 decimals, trailing zeros trimmed, kept as a float-looking literal
+  return v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '.0');
+}
+const _TOML_CTRL = { '\b': '\\b', '\t': '\\t', '\n': '\\n', '\f': '\\f', '\r': '\\r' };
+const _TOML_CTRL_RE = /[\u0000-\u001f\u007f]/g;
+function tomlStr(s) {
+  // TOML basic string: escape \ and ", plus every control char (a raw newline
+  // is an "Illegal character" that makes the whole file unparsable).
+  return '"' + String(s)
+    .replace(/[\\"]/g, c => '\\' + c)
+    .replace(_TOML_CTRL_RE, c => _TOML_CTRL[c]
+      || '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0').toUpperCase())
+    + '"';
+}
+function tomlKey(s) { return /^[A-Za-z0-9_-]+$/.test(s) ? s : tomlStr(s); }
+function tomlStrArray(arr) { return '[' + arr.map(tomlStr).join(', ') + ']'; }
+
+function poseOf(e) {
+  const c = (e.coords && e.coords[0]) || [0, 0];
+  return [c[0], c[1], e.heading || 0];
+}
+
+// Pure (DOM-free, so window._test can exercise it): build world.toml text
+// from waypoint elements + a vocab object.
+function buildWorldTomlFrom(elements, vocab) {
+  const lines = [
+    '# Generated by walkie-map-editor — arena map for walkie-agent-v2.',
+    '# Use as GPSR_WORLD_FILE (covers all challenges) or drop in as tasks/GPSR/world.toml.',
+  ];
+
+  // Top-level keys (the `names` array) MUST precede every [table] header — in TOML
+  // a bare key after `[object_categories]` would bind under that table instead.
+  const names = ((vocab && vocab.names) || []).map(s => String(s).trim()).filter(Boolean);
+  if (names.length) lines.push('', `names = ${tomlStrArray(names)}`);
+
+  const rooms = elements.filter(e => e.type === 'waypoint' && e.role === 'room');
+  const locs = elements.filter(e => e.type === 'waypoint' && e.role === 'location');
+
+  for (const e of rooms) {
+    const name = canon(e.name);
+    if (!name) continue;
+    lines.push('', `[rooms.${tomlKey(name)}]`);
+    lines.push(`pose = [${poseOf(e).map(fmtNum).join(', ')}]`);
+    if (e.aliases && e.aliases.length) lines.push(`aliases = ${tomlStrArray(e.aliases)}`);
+    if (e.barrier) lines.push('barrier = true');
+    if (!e.present) lines.push('present = false');
+  }
+  for (const e of locs) {
+    const name = canon(e.name);
+    if (!name) continue;
+    lines.push('', `[locations.${tomlKey(name)}]`);
+    if (canon(e.room)) lines.push(`room = ${tomlStr(canon(e.room))}`);
+    lines.push(`pose = [${poseOf(e).map(fmtNum).join(', ')}]`);
+    if (e.placement) lines.push('placement = true');
+    if (canon(e.category)) lines.push(`category = ${tomlStr(canon(e.category))}`);
+    if (e.aliases && e.aliases.length) lines.push(`aliases = ${tomlStrArray(e.aliases)}`);
+    if (e.barrier) lines.push('barrier = true');
+    if (!e.present) lines.push('present = false');
+  }
+
+  const cats = (vocab && vocab.object_categories) || {};
+  const catKeys = Object.keys(cats).filter(k => canon(k));
+  if (catKeys.length) {
+    lines.push('', '[object_categories]');
+    for (const k of catKeys) {
+      const objs = (cats[k] || []).map(canon).filter(Boolean);
+      lines.push(`${tomlKey(canon(k))} = ${tomlStrArray(objs)}`);
+    }
+  }
+
+  const gestures = (vocab && vocab.gestures) || {};
+  for (const g of Object.keys(gestures).filter(k => canon(k))) {
+    lines.push('', `[gestures.${tomlKey(canon(g))}]`);
+    lines.push(`aliases = ${tomlStrArray((gestures[g] || []).map(String))}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+function buildWorldToml() { return buildWorldTomlFrom(state.elements, state.vocab); }
+
+function validateWorld() { return worldIssuesFrom(state.elements, state.vocab); }
+
+// Pre-export checks (pure, so window._test can exercise it). Splits issues into:
+//   errors   — make the TOML unparsable (duplicate table/key from canon-collision);
+//              export MUST block, since a half-written file loses the WHOLE arena.
+//   warnings — droppable/advisory (location -> absent room, no name, shadowing,
+//              non-finite pose); export may proceed after a confirm.
+function worldIssuesFrom(elements, vocab) {
+  const errors = [], warnings = [];
+  const rooms = elements.filter(e => e.type === 'waypoint' && e.role === 'room');
+  const locs = elements.filter(e => e.type === 'waypoint' && e.role === 'location');
+
+  // canon-collision within a namespace => duplicate [rooms.x]/[locations.x] header.
+  const keysOf = (items, what) => {
+    const seen = new Map();
+    for (const e of items) {
+      const nm = canon(e.name);
+      if (!nm) { warnings.push(`a ${e.role} (#${e.id}) has no name — it won't be exported`); continue; }
+      if (seen.has(nm)) errors.push(`two ${what} normalize to "${nm}" (#${seen.get(nm)} + #${e.id}) — duplicate [${what}.${nm}] makes world.toml unparsable; rename one`);
+      else seen.set(nm, e.id);
+    }
+    return seen;
+  };
+  const roomKeys = keysOf(rooms, 'rooms');
+  const locKeys = keysOf(locs, 'locations');
+
+  // vocab canon-collisions => duplicate key / [gestures.x] header.
+  const dupVocab = (table, what) => {
+    const seen = new Map();
+    for (const raw of Object.keys(table || {})) {
+      const k = canon(raw);
+      if (!k) continue;
+      if (seen.has(k)) errors.push(`${what} "${seen.get(k)}" and "${raw}" normalize to "${k}" — duplicate key makes world.toml unparsable; rename one`);
+      else seen.set(k, raw);
+    }
+  };
+  dupVocab(vocab && vocab.object_categories, 'object categories');
+  dupVocab(vocab && vocab.gestures, 'gestures');
+
+  // warnings: a location pointing at a room that won't exist on the robot.
+  // roomNames excludes present=false rooms (walkie drops them, then cascade-drops
+  // any location referencing them).
+  const presentRooms = new Set(rooms.filter(e => e.present !== false && canon(e.name)).map(e => canon(e.name)));
+  for (const e of locs) {
+    const nm = canon(e.name);
+    if (nm && canon(e.room) && !presentRooms.has(canon(e.room)))
+      warnings.push(`location "${nm}" points at room "${canon(e.room)}", which isn't a present room — the robot will drop it`);
+  }
+  // a name used by both a room and a location: valid TOML (separate tables), but
+  // the robot resolves location-first, so the room becomes unreachable by name.
+  for (const nm of locKeys.keys())
+    if (roomKeys.has(nm)) warnings.push(`"${nm}" is both a room and a location — the location will shadow the room when the robot resolves that name`);
+
+  // a non-finite pose would be silently written as 0 by fmtNum — surface it.
+  for (const e of [...rooms, ...locs]) {
+    if (!poseOf(e).every(Number.isFinite))
+      warnings.push(`${e.role} "${canon(e.name) || ('#' + e.id)}" has a non-finite pose — it will export as 0`);
+  }
+  return { errors, warnings };
+}
+
+// ───── arena vocabulary (parse/serialize the textarea blocks) ───────
+
+function normalizeVocab(v) {
+  const out = { object_categories: {}, names: [], gestures: {} };
+  const oc = (v && v.object_categories) || {};
+  for (const k of Object.keys(oc)) out.object_categories[k] = (oc[k] || []).map(String);
+  out.names = Array.isArray(v && v.names) ? v.names.map(String) : [];
+  const g = (v && v.gestures) || {};
+  for (const k of Object.keys(g)) out.gestures[k] = (g[k] || []).map(String);
+  return out;
+}
+// "category: a, b, c" per line -> { category: [a, b, c] }
+function parseCategories(text) {
+  const out = {};
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\s*([^:]+):\s*(.*)$/);
+    if (!m || !m[1].trim()) continue;
+    out[m[1].trim()] = m[2].split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return out;
+}
+function categoriesToText(cats) {
+  return Object.keys(cats).map(k => `${k}: ${(cats[k] || []).join(', ')}`).join('\n');
+}
+function parseNames(text) { return text.split(/[\n,]/).map(s => s.trim()).filter(Boolean); }
+function namesToText(names) { return (names || []).join(', '); }
+// "gesture: alias1, alias2" per line; a bare "gesture" line = no aliases
+function parseGestures(text) {
+  const out = {};
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    const idx = line.indexOf(':');
+    const key = (idx < 0 ? line : line.slice(0, idx)).trim();
+    if (!key) continue;
+    out[key] = idx < 0 ? [] : line.slice(idx + 1).split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return out;
+}
+function gesturesToText(g) {
+  return Object.keys(g).map(k => (g[k] && g[k].length) ? `${k}: ${g[k].join(', ')}` : k).join('\n');
 }
 
 // ───── Coord helpers ────────────────────────────────────────────────
@@ -335,6 +578,7 @@ function kindOf(e) {
   if (e.type === 'nogo') return 'nogo';
   if (e.type === 'rect') return 'rect';
   if (e.type === 'point') return 'point';
+  if (e.type === 'waypoint') return 'waypoint';
   return 'polygon';
 }
 
@@ -349,7 +593,7 @@ function drawElements() {
   }
   if (state.drawing) {
     drawElement(state.drawing, true, true);
-    if (cursorPx && state.drawing.type !== 'rect' && state.drawing.coords.length) {
+    if (cursorPx && state.drawing.type !== 'rect' && state.drawing.type !== 'waypoint' && state.drawing.coords.length) {
       const last = state.drawing.coords[state.drawing.coords.length - 1];
       const lp = worldToPx(last[0], last[1]);
       ctx.save();
@@ -367,12 +611,29 @@ function drawElements() {
 
 function drawElement(e, selected, preview = false) {
   const nogoFill = e.type === 'nogo' || (e.asNogo && e.closed);
-  const col = nogoFill ? '#ff4444' : selected ? '#ffeb3b' : '#22d3ee';
+  const wp = e.type === 'waypoint';
+  const wpCol = e.role === 'room' ? '#f59e0b' : e.role === 'location' ? '#34d399' : '#a78bfa';
+  const col = selected ? '#ffeb3b' : nogoFill ? '#ff4444' : wp ? wpCol : '#22d3ee';
   ctx.lineWidth = (selected ? 2 : 1.5) / state.view.s;
   ctx.strokeStyle = col;
   ctx.fillStyle = nogoFill ? 'rgba(255,68,68,0.25)' : 'rgba(34,211,238,0.15)';
   const pts = e.coords.map(([wx, wy]) => worldToPx(wx, wy));
-  if (e.type === 'point') {
+  if (wp) {
+    const p = pts[0];
+    const L = WAYPOINT_ARROW_PX / state.view.s, r = 4 / state.view.s;
+    const ex = p.px + L * Math.cos(e.heading || 0);
+    const ey = p.py - L * Math.sin(e.heading || 0);   // world Y-up -> canvas Y-down
+    ctx.fillStyle = col;
+    ctx.lineWidth = (selected ? 2.5 : 1.8) / state.view.s;
+    ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(ex, ey); ctx.stroke();
+    const a = Math.atan2(ey - p.py, ex - p.px), ah = 7 / state.view.s;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - ah * Math.cos(a - 0.4), ey - ah * Math.sin(a - 0.4));
+    ctx.lineTo(ex - ah * Math.cos(a + 0.4), ey - ah * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2); ctx.fill();
+  } else if (e.type === 'point') {
     const p = pts[0];
     const r = 5 / state.view.s;
     ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -521,8 +782,8 @@ function rasterPoly(out, w, h, poly, val) {
 // ───── Undo / redo ──────────────────────────────────────────────────
 
 function pushUndo(act) { state.undo.push(act); state.redo.length = 0; if (state.undo.length > 100) state.undo.shift(); }
-function undo() { const a = state.undo.pop(); if (a) { applyInverse(a); state.redo.push(a); markDirty(); rebuildElemList(); rebuildVisibility(); draw(); } }
-function redoFn() { const a = state.redo.pop(); if (a) { applyForward(a); state.undo.push(a); markDirty(); rebuildElemList(); rebuildVisibility(); draw(); } }
+function undo() { const a = state.undo.pop(); if (a) { applyInverse(a); state.redo.push(a); markDirty(); rebuildElemList(); rebuildVisibility(); rebuildInspector(); draw(); } }
+function redoFn() { const a = state.redo.pop(); if (a) { applyForward(a); state.undo.push(a); markDirty(); rebuildElemList(); rebuildVisibility(); rebuildInspector(); draw(); } }
 
 function applyInverse(a) {
   if (a.kind === 'pixel') {
@@ -581,6 +842,7 @@ canvas.addEventListener('mousedown', (ev) => {
     const id = hitTest(w.wx, w.wy);
     state.selected = id;
     rebuildElemList();
+    rebuildInspector();
     draw();
     return;
   }
@@ -589,6 +851,10 @@ canvas.addEventListener('mousedown', (ev) => {
     state.currentStroke = new Map();
     state.prevPaintPt = null;
     strokeTo(p.px, p.py);
+    draw();
+  } else if (state.tool === 'waypoint') {
+    state.drawing = { id: 'tmp', type: 'waypoint', label: 'waypoint',
+      coords: [[w.wx, w.wy]], closed: false, asNogo: false, ...defaultWaypointFields() };
     draw();
   } else if (state.tool === 'point') {
     addElement({ type: 'point', label: currentLabel(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
@@ -630,6 +896,10 @@ canvas.addEventListener('mousemove', (ev) => {
   } else if (state.drawing) {
     if (state.drawing.type === 'rect') {
       state.drawing.coords[1] = [w.wx, w.wy];
+    } else if (state.drawing.type === 'waypoint') {
+      const [ax, ay] = state.drawing.coords[0];
+      const dx = w.wx - ax, dy = w.wy - ay;
+      if (Math.hypot(dx, dy) > 2 * state.meta.resolution) state.drawing.heading = Math.atan2(dy, dx);
     }
   }
   draw();
@@ -655,6 +925,15 @@ canvas.addEventListener('mouseup', (ev) => {
     state.drawing = null;
     addElement(el);
   }
+  if (state.tool === 'waypoint' && state.drawing && state.drawing.type === 'waypoint') {
+    const wp = state.drawing;
+    state.drawing = null;
+    addElement(wp);            // assigns wp.id
+    state.selected = wp.id;    // select it so the inspector opens for naming
+    rebuildElemList();
+    rebuildInspector();
+    draw();
+  }
 });
 
 canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
@@ -673,11 +952,14 @@ canvas.addEventListener('wheel', (ev) => {
 }, { passive: false });
 
 window.addEventListener('keydown', (ev) => {
-  if (ev.target.tagName === 'INPUT') return;
+  // Don't hijack keys (Backspace/Delete -> deleteElement, Ctrl+Z -> undo) while
+  // the user is typing in any form control — incl. the vocab <textarea>s and the
+  // inspector role/room <select>s, not just <input>.
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(ev.target.tagName) || ev.target.isContentEditable) return;
   if (ev.key === 'Escape') {
     if (state.drawing) {
-      if (state.drawing.type !== 'rect') finishPoly(false);
-      else { state.drawing = null; draw(); }
+      if (state.drawing.type === 'rect' || state.drawing.type === 'waypoint') { state.drawing = null; draw(); }
+      else finishPoly(false);
     }
   } else if (ev.key === 'Delete' || ev.key === 'Backspace') {
     if (state.selected) deleteElement(state.selected);
@@ -720,11 +1002,13 @@ function deleteElement(id) {
   markDirty();
   rebuildElemList();
   rebuildVisibility();
+  rebuildInspector();
   draw();
 }
 function renameElement(id, label) {
   const el = state.elements.find(e => e.id === id);
-  if (!el || !label || el.label === label) return;
+  if (!el || el.type === 'waypoint') return;  // waypoints are named via the inspector
+  if (!label || el.label === label) return;
   const before = { label: el.label };
   el.label = label;
   if (!state.labels.includes(label)) { state.labels.push(label); rebuildLabelSelect(); }
@@ -751,7 +1035,7 @@ function hitTest(wx, wy) {
     const e = state.elements[i];
     if (!isVisible(e)) continue;
     const pts = e.coords;
-    if (e.type === 'point') {
+    if (e.type === 'point' || e.type === 'waypoint') {
       const [x, y] = pts[0];
       if (Math.hypot(x - wx, y - wy) < tol) return e.id;
     } else if (e.closed && pts.length >= 3) {
@@ -818,8 +1102,11 @@ function rebuildElemList() {
 
     li.appendChild(main); li.appendChild(actions);
 
-    li.onclick = (ev) => { if (ev.target.closest('.acts')) return; state.selected = e.id; rebuildElemList(); draw(); };
-    li.ondblclick = (ev) => {
+    li.onclick = (ev) => { if (ev.target.closest('.acts')) return; state.selected = e.id; rebuildElemList(); rebuildInspector(); draw(); };
+    // Waypoints are renamed via the inspector (their label mirrors `name`), so the
+    // dblclick label-editor is wired only for the drawing kinds it actually owns —
+    // otherwise its blur would no-op in renameElement and strand the input in the DOM.
+    if (e.type !== 'waypoint') li.ondblclick = (ev) => {
       if (ev.target.closest('.acts')) return;
       const input = document.createElement('input');
       input.value = e.label; input.size = 12;
@@ -896,6 +1183,141 @@ function loadLabels() {
   } catch {}
 }
 
+// ───── Waypoint inspector ───────────────────────────────────────────
+
+// Apply a patch of fields to an element as one undoable elem-mod step.
+function updateElementFields(id, patch) {
+  const el = state.elements.find(e => e.id === id);
+  if (!el) return;
+  const before = {}, after = {};
+  let changed = false;
+  for (const k of Object.keys(patch)) {
+    if (JSON.stringify(el[k]) === JSON.stringify(patch[k])) continue;
+    before[k] = el[k]; after[k] = patch[k]; el[k] = patch[k]; changed = true;
+  }
+  if (!changed) return;
+  pushUndo({ kind: 'elem-mod', el, before, after });
+  markDirty();
+}
+
+function roomWaypointNames() {
+  return [...new Set(state.elements
+    .filter(e => e.type === 'waypoint' && e.role === 'room' && canon(e.name))
+    .map(e => canon(e.name)))].sort();
+}
+
+function rebuildInspector() {
+  const root = $('#inspector');
+  if (!root) return;
+  while (root.firstChild) root.removeChild(root.firstChild);
+  const el = state.selected && state.elements.find(e => e.id === state.selected);
+  if (!el || el.type !== 'waypoint') {
+    const m = document.createElement('div');
+    m.className = 'muted';
+    m.textContent = el ? 'Selected element is not a waypoint.'
+      : 'Select a waypoint to edit its place + heading.';
+    root.appendChild(m);
+    return;
+  }
+
+  const field = (labelText, control) => {
+    const row = document.createElement('label');
+    row.className = 'insp-row';
+    const span = document.createElement('span');
+    span.className = 'insp-lbl'; span.textContent = labelText;
+    row.appendChild(span); row.appendChild(control);
+    root.appendChild(row);
+  };
+  const commit = (patch) => {
+    updateElementFields(el.id, patch);
+    // Only `name` (mutates the list label + filter sets) and `role` (changes which
+    // fields render) need a full rebuild; other fields just redraw — which also
+    // keeps focus in the field being edited instead of tearing down the DOM.
+    if ('name' in patch || 'role' in patch) { rebuildElemList(); rebuildVisibility(); rebuildInspector(); }
+    draw();
+  };
+
+  const roleSel = document.createElement('select');
+  for (const [v, t] of [['', '(not exported)'], ['room', 'room'], ['location', 'location']]) {
+    const o = document.createElement('option'); o.value = v; o.textContent = t; roleSel.appendChild(o);
+  }
+  roleSel.value = el.role || '';
+  roleSel.onchange = () => commit({ role: roleSel.value });
+  field('role', roleSel);
+
+  const nameIn = document.createElement('input');
+  nameIn.type = 'text'; nameIn.value = el.name || ''; nameIn.placeholder = 'kitchen_table';
+  nameIn.onchange = () => { const nm = canon(nameIn.value); commit({ name: nm, label: nm || 'waypoint' }); };
+  field('name', nameIn);
+
+  if (el.role === 'location') {
+    const roomSel = document.createElement('select');
+    const blank = document.createElement('option'); blank.value = ''; blank.textContent = '(none)';
+    roomSel.appendChild(blank);
+    for (const r of roomWaypointNames()) {
+      const o = document.createElement('option'); o.value = r; o.textContent = r; roomSel.appendChild(o);
+    }
+    roomSel.value = canon(el.room) || '';
+    roomSel.onchange = () => commit({ room: roomSel.value });
+    field('room', roomSel);
+
+    const catIn = document.createElement('input');
+    catIn.type = 'text'; catIn.value = el.category || ''; catIn.placeholder = 'table';
+    catIn.onchange = () => commit({ category: canon(catIn.value) });
+    field('category', catIn);
+
+    const placeCb = document.createElement('input');
+    placeCb.type = 'checkbox'; placeCb.checked = !!el.placement;
+    placeCb.onchange = () => commit({ placement: placeCb.checked });
+    field('placement', placeCb);
+  }
+
+  const headIn = document.createElement('input');
+  headIn.type = 'number'; headIn.step = '1';
+  headIn.value = Math.round((el.heading || 0) * 180 / Math.PI);
+  headIn.onchange = () => {
+    let deg = parseFloat(headIn.value); if (!Number.isFinite(deg)) deg = 0;
+    commit({ heading: deg * Math.PI / 180 });
+  };
+  field('heading °', headIn);
+
+  const aliasIn = document.createElement('input');
+  aliasIn.type = 'text'; aliasIn.value = (el.aliases || []).join(', '); aliasIn.placeholder = 'comma, separated';
+  aliasIn.onchange = () => commit({ aliases: aliasIn.value.split(',').map(s => s.trim()).filter(Boolean) });
+  field('aliases', aliasIn);
+
+  const barCb = document.createElement('input');
+  barCb.type = 'checkbox'; barCb.checked = !!el.barrier;
+  barCb.onchange = () => commit({ barrier: barCb.checked });
+  field('barrier', barCb);
+
+  const presCb = document.createElement('input');
+  presCb.type = 'checkbox'; presCb.checked = el.present !== false;
+  presCb.onchange = () => commit({ present: presCb.checked });
+  field('present', presCb);
+
+  const pos = document.createElement('div');
+  pos.className = 'muted';
+  const c = el.coords[0] || [0, 0];
+  pos.textContent = `pos: ${(+c[0]).toFixed(3)}, ${(+c[1]).toFixed(3)} m · re-aim by re-drawing with the Waypoint tool`;
+  root.appendChild(pos);
+}
+
+// ───── Arena vocabulary panel ───────────────────────────────────────
+
+function rebuildVocabUI() {
+  const c = $('#vocab-categories'), n = $('#vocab-names'), g = $('#vocab-gestures');
+  if (c) c.value = categoriesToText(state.vocab.object_categories);
+  if (n) n.value = namesToText(state.vocab.names);
+  if (g) g.value = gesturesToText(state.vocab.gestures);
+}
+function wireVocab() {
+  const c = $('#vocab-categories'), n = $('#vocab-names'), g = $('#vocab-gestures');
+  if (c) c.addEventListener('change', () => { state.vocab.object_categories = parseCategories(c.value); markDirty(); });
+  if (n) n.addEventListener('change', () => { state.vocab.names = parseNames(n.value); markDirty(); });
+  if (g) g.addEventListener('change', () => { state.vocab.gestures = parseGestures(g.value); markDirty(); });
+}
+
 // ───── UI wiring ────────────────────────────────────────────────────
 
 $('#folder-input').addEventListener('change', (ev) => loadFolder(ev.target.files));
@@ -970,6 +1392,8 @@ window.addEventListener('resize', () => draw());
 loadLabels();
 rebuildLabelSelect();
 rebuildVisibility();
+rebuildInspector();
+wireVocab();
 setTool('pen');
 draw();
 status('drag a map folder to begin');
@@ -992,6 +1416,51 @@ window._test = function () {
   let blackCount = 0;
   for (const v of out) if (v === 0) blackCount++;
   console.assert(blackCount >= 4, 'raster filled, got ' + blackCount);
+
+  // world.toml builder (pure)
+  const wpRoom = { type: 'waypoint', role: 'room', name: 'Kitchen', heading: Math.PI / 2,
+    coords: [[1.2, 3.4]], aliases: ['the kitchen'], barrier: true, present: true };
+  const wpLoc = { type: 'waypoint', role: 'location', name: 'kitchen table', room: 'kitchen',
+    heading: 0, coords: [[1.0, 2.0]], category: 'table', placement: true, aliases: [], present: true };
+  const wpAbsent = { type: 'waypoint', role: 'room', name: 'hall', heading: 0, coords: [[0, 0]], present: false };
+  const vocab = { object_categories: { drinks: ['Cola', 'water'] }, names: ['Charlie'],
+    gestures: { waving: ['waving person'] } };
+  const toml = buildWorldTomlFrom([wpRoom, wpLoc, wpAbsent], vocab);
+  console.assert(/\[rooms\.kitchen\]/.test(toml), 'room table');
+  console.assert(/\[locations\.kitchen_table\]/.test(toml), 'location table snake_cased');
+  console.assert(/room = "kitchen"/.test(toml), 'location->room link');
+  console.assert(/pose = \[1\.2, 3\.4, 1\.5708\]/.test(toml), 'room pose w/ heading, got:\n' + toml);
+  console.assert(/barrier = true/.test(toml), 'barrier flag');
+  console.assert(/present = false/.test(toml), 'absent room marked present=false');
+  console.assert(/\[object_categories\]/.test(toml) && /drinks = \["cola", "water"\]/.test(toml), 'object categories lowercased');
+  console.assert(/names = \["Charlie"\]/.test(toml), 'names keep casing');
+  console.assert(/\[gestures\.waving\]/.test(toml), 'gestures table');
+  console.assert(canon('the Kitchen Table') === 'the_kitchen_table', 'canon');
+
+  // vocab parse round-trips
+  const cats = parseCategories('drinks: cola, water\nsnacks: chips');
+  console.assert(cats.drinks.length === 2 && cats.snacks[0] === 'chips', 'parseCategories');
+  console.assert(parseNames('Charlie, Alex\nRobin').length === 3, 'parseNames');
+  const gs = parseGestures('waving: a, b\npointing');
+  console.assert(gs.waving.length === 2 && gs.pointing.length === 0, 'parseGestures');
+
+  // canon parity with Python _norm: Unicode letters survive
+  console.assert(canon('Café') === 'café', 'canon keeps unicode letters, got ' + canon('Café'));
+  // tomlStr escapes a control char rather than emitting it raw
+  console.assert(tomlStr('a\nb') === '"a\\nb"', 'tomlStr escapes newline, got ' + tomlStr('a\nb'));
+
+  // validation: clean world has no fatal errors; canon-collisions are errors
+  console.assert(worldIssuesFrom([wpRoom, wpLoc], vocab).errors.length === 0, 'clean world: no errors');
+  console.assert(worldIssuesFrom([], { object_categories: { Drinks: ['a'], drinks: ['b'] }, names: [], gestures: {} }).errors.length === 1, 'colliding categories -> error');
+  const dupRooms = [
+    { type: 'waypoint', role: 'room', name: 'Kitchen', coords: [[0, 0]], heading: 0, present: true },
+    { type: 'waypoint', role: 'room', name: 'kitchen', coords: [[1, 1]], heading: 0, present: true }];
+  console.assert(worldIssuesFrom(dupRooms, {}).errors.length === 1, 'colliding room names -> error');
+  // location -> present=false room is a warning (cascade-dropped on the robot)
+  const absentRoomCase = [
+    { type: 'waypoint', role: 'room', name: 'pantry', coords: [[0, 0]], heading: 0, present: false },
+    { type: 'waypoint', role: 'location', name: 'pantry_shelf', room: 'pantry', coords: [[1, 1]], heading: 0, present: true }];
+  console.assert(worldIssuesFrom(absentRoomCase, {}).warnings.some(w => /pantry_shelf/.test(w)), 'location->absent room warned');
 
   console.log('self-check ok');
 };
