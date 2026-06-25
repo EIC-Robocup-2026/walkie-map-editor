@@ -75,18 +75,33 @@ A dashed rubber-band line follows the cursor while drawing.
 A waypoint stores a full pose `(x, y, heading)`. Select it (Select tool or the
 sidebar list) and fill the **Waypoint** inspector in the sidebar:
 
-- **role** — `room`, `location`, or `(not exported)`. Only `room`/`location`
-  waypoints land in `world.toml`.
+- **role** — dropdown: `room`, `location`, or `(not exported)`. Only
+  `room`/`location` waypoints land in `world.toml`.
 - **name** — the canonical id (auto-snake_cased, e.g. `kitchen_table`); must be
-  unique.
+  unique. The box is a **combo**: it suggests the challenge-contract names
+  (role-aware — room names vs location names) so you pick them instead of
+  mistyping, but you can still type any name (GPSR arena places are arbitrary).
 - **room** (locations only) — dropdown of your room waypoints, so the
   location→room link can never dangle.
-- **category** / **placement** (locations only), **aliases**, **barrier**,
-  **present** — see the [schema](#worldtoml--walkie-agent-v2-map).
+- **category** (locations only) — combo suggesting common categories + your
+  existing labels. **placement** / **aliases** / **barrier** / **present** —
+  see the [schema](#worldtoml--walkie-agent-v2-map).
 - **heading °** — edit the facing angle numerically (degrees) if dragging
   wasn't precise enough.
 
 Re-aim a committed waypoint by re-drawing it with the Waypoint tool.
+
+**Arena vocabulary (GPSR)** — a sidebar panel of structured row editors for the
+non-spatial nouns GPSR grounds against:
+
+- **Object categories** — each row is a category name + a comma-separated object
+  list (e.g. `drinks` → `cola, water, milk`). The name box suggests common
+  RoboCup categories.
+- **Names** — one person name per row.
+- **Gestures** — each row is a gesture name + comma-separated aliases.
+
+Click **+** to add a row, **×** to remove one. Empty rows are ignored on export.
+These round-trip through `_element.json` so re-exporting never loses them.
 
 **Viewport**
 

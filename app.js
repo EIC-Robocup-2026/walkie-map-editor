@@ -9,6 +9,19 @@ const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', nogo: 'n
 // Default heading-arrow length on screen (px); world direction, y-flipped to canvas.
 const WAYPOINT_ARROW_PX = 26;
 
+// Inspector combo-box suggestions. The name/category inputs stay FREE TEXT (GPSR
+// names arbitrary arena places), but these surface the load-bearing challenge-
+// contract names (docs/MAP_LOCATIONS.md) so they're picked, not mistyped.
+const SUGGEST_ROOM_NAMES = ['kitchen', 'living_room', 'bedroom', 'office', 'dining_room', 'hallway', 'bathroom'];
+const SUGGEST_LOCATION_NAMES = ['dining_table', 'kitchen_bar', 'dishwasher', 'cabinet', 'trash_bin',
+  'breakfast_surface', 'extra_surface', 'laundry_area', 'laundry_basket', 'folding_table',
+  'washing_machine', 'entrance_door'];
+const SUGGEST_CATEGORIES = ['table', 'shelf', 'cabinet', 'counter', 'bin', 'sofa', 'chair', 'bed', 'sink', 'door', 'appliance', 'rack'];
+// Arena-vocabulary key suggestions (GPSR). Free text — arenas vary — but these are
+// the usual RoboCup categories/gestures so they're picked, not retyped.
+const SUGGEST_OBJECT_CATEGORIES = ['drinks', 'snacks', 'fruits', 'food', 'dishes', 'cleaning_supplies', 'toys', 'containers'];
+const SUGGEST_GESTURES = ['waving', 'raising_left_arm', 'raising_right_arm', 'pointing_left', 'pointing_right', 'pointing_up', 'pointing_down'];
+
 const state = {
   meta: null,
   w: 0, h: 0,
@@ -438,7 +451,7 @@ function worldIssuesFrom(elements, vocab) {
   return { errors, warnings };
 }
 
-// ───── arena vocabulary (parse/serialize the textarea blocks) ───────
+// ───── arena vocabulary (structured editor model) ───────────────────
 
 function normalizeVocab(v) {
   const out = { object_categories: {}, names: [], gestures: {} };
@@ -449,36 +462,8 @@ function normalizeVocab(v) {
   for (const k of Object.keys(g)) out.gestures[k] = (g[k] || []).map(String);
   return out;
 }
-// "category: a, b, c" per line -> { category: [a, b, c] }
-function parseCategories(text) {
-  const out = {};
-  for (const line of text.split('\n')) {
-    const m = line.match(/^\s*([^:]+):\s*(.*)$/);
-    if (!m || !m[1].trim()) continue;
-    out[m[1].trim()] = m[2].split(',').map(s => s.trim()).filter(Boolean);
-  }
-  return out;
-}
-function categoriesToText(cats) {
-  return Object.keys(cats).map(k => `${k}: ${(cats[k] || []).join(', ')}`).join('\n');
-}
-function parseNames(text) { return text.split(/[\n,]/).map(s => s.trim()).filter(Boolean); }
-function namesToText(names) { return (names || []).join(', '); }
-// "gesture: alias1, alias2" per line; a bare "gesture" line = no aliases
-function parseGestures(text) {
-  const out = {};
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    const idx = line.indexOf(':');
-    const key = (idx < 0 ? line : line.slice(0, idx)).trim();
-    if (!key) continue;
-    out[key] = idx < 0 ? [] : line.slice(idx + 1).split(',').map(s => s.trim()).filter(Boolean);
-  }
-  return out;
-}
-function gesturesToText(g) {
-  return Object.keys(g).map(k => (g[k] && g[k].length) ? `${k}: ${g[k].join(', ')}` : k).join('\n');
-}
+// "a, b, c" -> ["a","b","c"] (trimmed, blanks dropped)
+function splitList(s) { return String(s).split(',').map(x => x.trim()).filter(Boolean); }
 
 // ───── Coord helpers ────────────────────────────────────────────────
 
@@ -1206,6 +1191,16 @@ function roomWaypointNames() {
     .map(e => canon(e.name)))].sort();
 }
 
+// Populate a <datalist> (combo-box suggestions) — dedup, preserve order.
+function fillDatalist(id, values) {
+  const dl = $('#' + id);
+  if (!dl) return;
+  while (dl.firstChild) dl.removeChild(dl.firstChild);
+  for (const v of [...new Set(values)]) {
+    const o = document.createElement('option'); o.value = v; dl.appendChild(o);
+  }
+}
+
 function rebuildInspector() {
   const root = $('#inspector');
   if (!root) return;
@@ -1247,6 +1242,11 @@ function rebuildInspector() {
 
   const nameIn = document.createElement('input');
   nameIn.type = 'text'; nameIn.value = el.name || ''; nameIn.placeholder = 'kitchen_table';
+  nameIn.setAttribute('list', 'wp-name-options');  // combo: suggest contract names, still free text
+  fillDatalist('wp-name-options',
+    el.role === 'room' ? SUGGEST_ROOM_NAMES
+      : el.role === 'location' ? SUGGEST_LOCATION_NAMES
+      : [...SUGGEST_ROOM_NAMES, ...SUGGEST_LOCATION_NAMES]);
   nameIn.onchange = () => { const nm = canon(nameIn.value); commit({ name: nm, label: nm || 'waypoint' }); };
   field('name', nameIn);
 
@@ -1263,6 +1263,8 @@ function rebuildInspector() {
 
     const catIn = document.createElement('input');
     catIn.type = 'text'; catIn.value = el.category || ''; catIn.placeholder = 'table';
+    catIn.setAttribute('list', 'wp-cat-options');
+    fillDatalist('wp-cat-options', [...new Set([...SUGGEST_CATEGORIES, ...state.labels])]);
     catIn.onchange = () => commit({ category: canon(catIn.value) });
     field('category', catIn);
 
@@ -1303,19 +1305,95 @@ function rebuildInspector() {
   root.appendChild(pos);
 }
 
-// ───── Arena vocabulary panel ───────────────────────────────────────
+// ───── Arena vocabulary panel (structured row editor) ───────────────
+
+// One editor row: text inputs + a × remove button. fields = [{value, placeholder,
+// cls, list?, onChange}].
+function _vocabRow(fields, onRemove) {
+  const row = document.createElement('div');
+  row.className = 'vrow';
+  for (const f of fields) {
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.value = f.value || ''; inp.placeholder = f.placeholder || '';
+    if (f.cls) inp.className = f.cls;
+    if (f.list) inp.setAttribute('list', f.list);
+    inp.onchange = () => f.onChange(inp.value);
+    row.appendChild(inp);
+  }
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'vx mini'; x.textContent = '×'; x.title = 'remove';
+  x.onclick = onRemove;
+  row.appendChild(x);
+  return row;
+}
+function _addBtn(text, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'vadd mini'; b.textContent = text; b.onclick = onClick;
+  return b;
+}
+
+// keyed editor: { key: [values] } as rows of [key | comma-list | ×]. Field edits
+// mutate a working array + recommit on each field edit (no re-render, so focus
+// stays); rows are added/removed in place (a freshly added empty row must persist
+// for typing — re-deriving from state would drop it before it has a key).
+function _renderKeyed(id, get, set, keyPh, valPh, addText, keyList) {
+  const root = $('#' + id);
+  if (!root) return;
+  while (root.firstChild) root.removeChild(root.firstChild);
+  const rows = Object.entries(get()).map(([k, v]) => [k, (v || []).join(', ')]);
+  const commit = () => {
+    const out = {};
+    for (const [k, t] of rows) { const kk = k.trim(); if (kk) out[kk] = splitList(t); }
+    set(out); markDirty();
+  };
+  const addBtn = _addBtn(addText, null);
+  const addRow = (pair) => {
+    const rowEl = _vocabRow([
+      { value: pair[0], placeholder: keyPh, cls: 'vk', list: keyList, onChange: v => { pair[0] = v; commit(); } },
+      { value: pair[1], placeholder: valPh, cls: 'vv', onChange: v => { pair[1] = v; commit(); } },
+    ], () => { rows.splice(rows.indexOf(pair), 1); root.removeChild(rowEl); commit(); });
+    root.insertBefore(rowEl, addBtn);
+    return rowEl;
+  };
+  for (const pair of rows) addRow(pair);
+  root.appendChild(addBtn);
+  addBtn.onclick = () => { const pair = ['', '']; rows.push(pair); const r = addRow(pair); focusFirst(r); };
+}
+
+// flat list editor: [string] as rows of [value | ×]. Items are wrapped in {v} so
+// splice-by-identity is stable across edits.
+function _renderList(id, get, set, valPh, addText) {
+  const root = $('#' + id);
+  if (!root) return;
+  while (root.firstChild) root.removeChild(root.firstChild);
+  const rows = (get() || []).map(s => ({ v: s }));
+  const commit = () => { set(rows.map(r => r.v.trim()).filter(Boolean)); markDirty(); };
+  const addBtn = _addBtn(addText, null);
+  const addRow = (item) => {
+    const rowEl = _vocabRow(
+      [{ value: item.v, placeholder: valPh, cls: 'vv', onChange: v => { item.v = v; commit(); } }],
+      () => { rows.splice(rows.indexOf(item), 1); root.removeChild(rowEl); commit(); });
+    root.insertBefore(rowEl, addBtn);
+    return rowEl;
+  };
+  for (const item of rows) addRow(item);
+  root.appendChild(addBtn);
+  addBtn.onclick = () => { const item = { v: '' }; rows.push(item); const r = addRow(item); focusFirst(r); };
+}
+
+function focusFirst(rowEl) {
+  const inp = rowEl && rowEl.children && rowEl.children[0];
+  if (inp && inp.focus) inp.focus();
+}
 
 function rebuildVocabUI() {
-  const c = $('#vocab-categories'), n = $('#vocab-names'), g = $('#vocab-gestures');
-  if (c) c.value = categoriesToText(state.vocab.object_categories);
-  if (n) n.value = namesToText(state.vocab.names);
-  if (g) g.value = gesturesToText(state.vocab.gestures);
-}
-function wireVocab() {
-  const c = $('#vocab-categories'), n = $('#vocab-names'), g = $('#vocab-gestures');
-  if (c) c.addEventListener('change', () => { state.vocab.object_categories = parseCategories(c.value); markDirty(); });
-  if (n) n.addEventListener('change', () => { state.vocab.names = parseNames(n.value); markDirty(); });
-  if (g) g.addEventListener('change', () => { state.vocab.gestures = parseGestures(g.value); markDirty(); });
+  fillDatalist('wp-objcat-options', SUGGEST_OBJECT_CATEGORIES);
+  fillDatalist('wp-gesture-options', SUGGEST_GESTURES);
+  _renderKeyed('vocab-categories', () => state.vocab.object_categories,
+    o => state.vocab.object_categories = o, 'category', 'objects (comma)', '+ category', 'wp-objcat-options');
+  _renderList('vocab-names', () => state.vocab.names, a => state.vocab.names = a, 'name', '+ name');
+  _renderKeyed('vocab-gestures', () => state.vocab.gestures,
+    o => state.vocab.gestures = o, 'gesture', 'aliases (comma)', '+ gesture', 'wp-gesture-options');
 }
 
 // ───── UI wiring ────────────────────────────────────────────────────
@@ -1393,7 +1471,7 @@ loadLabels();
 rebuildLabelSelect();
 rebuildVisibility();
 rebuildInspector();
-wireVocab();
+rebuildVocabUI();
 setTool('pen');
 draw();
 status('drag a map folder to begin');
@@ -1437,12 +1515,11 @@ window._test = function () {
   console.assert(/\[gestures\.waving\]/.test(toml), 'gestures table');
   console.assert(canon('the Kitchen Table') === 'the_kitchen_table', 'canon');
 
-  // vocab parse round-trips
-  const cats = parseCategories('drinks: cola, water\nsnacks: chips');
-  console.assert(cats.drinks.length === 2 && cats.snacks[0] === 'chips', 'parseCategories');
-  console.assert(parseNames('Charlie, Alex\nRobin').length === 3, 'parseNames');
-  const gs = parseGestures('waving: a, b\npointing');
-  console.assert(gs.waving.length === 2 && gs.pointing.length === 0, 'parseGestures');
+  // vocab editor helpers
+  console.assert(splitList('cola, water ,  milk ').length === 3, 'splitList trims + drops blanks');
+  console.assert(splitList('').length === 0, 'splitList empty');
+  const nv = normalizeVocab({ object_categories: { drinks: ['cola'] }, names: ['Alex'], gestures: { waving: [] } });
+  console.assert(nv.object_categories.drinks[0] === 'cola' && nv.names[0] === 'Alex' && 'waving' in nv.gestures, 'normalizeVocab round-trips');
 
   // canon parity with Python _norm: Unicode letters survive
   console.assert(canon('Café') === 'café', 'canon keeps unicode letters, got ' + canon('Café'));
