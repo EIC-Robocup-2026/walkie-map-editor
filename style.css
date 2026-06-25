@@ -75,6 +75,24 @@ ul.help code { background: #1a1a1a; padding: 0 4px; border-radius: 2px; color: #
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Waypoint inspector */
+#inspector { font-size: 12px; }
+.insp-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.insp-lbl { color: #999; width: 74px; flex-shrink: 0; }
+.insp-row input[type=text], .insp-row input[type=number], .insp-row select { flex: 1; min-width: 0; }
+.insp-row input[type=checkbox] { accent-color: #2563eb; margin-right: auto; }
+
+/* Arena vocabulary */
+.vocab-block { font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.vocab-help { color: #888; font-size: 11px; margin-bottom: 4px; line-height: 1.4; }
+.vocab-lbl { color: #999; margin-top: 6px; display: block; }
+.vocab-lbl code { background: #1a1a1a; padding: 0 4px; border-radius: 2px; color: #bbb; }
+.vocab-block textarea {
+  background: #1e1e1e; color: #ddd; border: 1px solid #555; border-radius: 3px;
+  padding: 4px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  width: 100%; resize: vertical;
+}
+
 @media (max-width: 900px) {
   #side { width: 220px; }
   #status { right: 220px; }
