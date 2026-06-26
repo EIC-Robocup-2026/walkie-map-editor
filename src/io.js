@@ -35,6 +35,9 @@ export async function loadFolder(files) {
   for (const f of files) {
     if (f.webkitRelativePath) { folderName = f.webkitRelativePath.split('/')[0]; break; }
   }
+  // Re-importing an export folder (<name>_export_YYYYMMDD_HHMMSS, or the older
+  // _HHMM form) should recover the original <name>, not stack another suffix.
+  folderName = folderName.replace(/_export_\d{8}_\d{4,6}$/, '');
 
   const parsed = parsePGM(await pgm.arrayBuffer());
   const meta = parseYAML(await yaml.text());
