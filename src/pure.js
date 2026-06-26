@@ -264,6 +264,14 @@ export function pointInPoly(x, y, poly) {
   }
   return inside;
 }
+// Signed polygon area (shoelace); callers take abs for magnitude.
+export function polygonArea(pts) {
+  let a = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    a += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]);
+  }
+  return a / 2;
+}
 export function distToSeg(x, y, a, b) {
   const [ax, ay] = a, [bx, by] = b;
   const dx = bx - ax, dy = by - ay;

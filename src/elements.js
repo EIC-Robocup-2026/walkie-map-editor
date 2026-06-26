@@ -3,7 +3,7 @@
 'use strict';
 
 import { state, markDirty } from './state.js';
-import { pointInPoly, distToSeg } from './pure.js';
+import { pointInPoly, distToSeg, polygonArea } from './pure.js';
 import { pushUndo } from './history.js';
 import { draw } from './render.js';
 import { rebuildElemList, rebuildVisibility, rebuildInspector, rebuildLabelSelect } from './ui.js';
@@ -88,22 +88,34 @@ export function updateElementFields(id, patch) {
   markDirty();
 }
 
+// Pick the element under (wx, wy). Ranked so small things stay reachable when a
+// large area is drawn over them: nearest point/waypoint wins first, then nearest
+// polyline, then the SMALLEST-area closed polygon containing the click (a tiny
+// rect inside a big one is selectable; clicking the big one elsewhere still works).
+// Within a tier, ties break toward the topmost (later) element.
 export function hitTest(wx, wy) {
   const tol = 6 / state.view.s * state.meta.resolution;
+  let pt = null, ptD = Infinity;          // nearest point/waypoint
+  let line = null, lineD = Infinity;      // nearest polyline edge
+  let area = null, areaSize = Infinity;   // smallest containing closed area
   for (let i = state.elements.length - 1; i >= 0; i--) {
     const e = state.elements[i];
     if (!isVisible(e)) continue;
     const pts = e.coords;
     if (e.type === 'point' || e.type === 'waypoint') {
-      const [x, y] = pts[0];
-      if (Math.hypot(x - wx, y - wy) < tol) return e.id;
+      const d = Math.hypot(pts[0][0] - wx, pts[0][1] - wy);
+      if (d < tol && d < ptD) { ptD = d; pt = e.id; }
     } else if (e.closed && pts.length >= 3) {
-      if (pointInPoly(wx, wy, pts)) return e.id;
+      if (pointInPoly(wx, wy, pts)) {
+        const a = Math.abs(polygonArea(pts));
+        if (a < areaSize) { areaSize = a; area = e.id; }
+      }
     } else if (pts.length >= 2) {
       for (let k = 0; k < pts.length - 1; k++) {
-        if (distToSeg(wx, wy, pts[k], pts[k + 1]) < tol) return e.id;
+        const d = distToSeg(wx, wy, pts[k], pts[k + 1]);
+        if (d < tol && d < lineD) { lineD = d; line = e.id; }
       }
     }
   }
-  return null;
+  return pt || line || area || null;
 }
