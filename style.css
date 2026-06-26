@@ -3,11 +3,11 @@ html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; font-s
 body { display: flex; flex-direction: column; min-width: 0; }
 
 #toolbar {
-  display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 10px;
-  background: #2a2a2a; border-bottom: 1px solid #444; flex-shrink: 0;
+  display: flex; flex-wrap: nowrap; gap: 6px; padding: 4px 8px; align-items: center;
+  background: #2a2a2a; border-bottom: 1px solid #444; flex-shrink: 0; overflow-x: auto;
 }
-.grp { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.grp .lbl { color: #888; font-size: 11px; margin-right: 4px; text-transform: uppercase; }
+.grp { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap; flex-shrink: 0; }
+.grp + .grp { border-left: 1px solid #3a3a3a; padding-left: 6px; }
 button, .btn {
   background: #3a3a3a; color: #ddd; border: 1px solid #555; border-radius: 3px;
   padding: 4px 10px; cursor: pointer; font: inherit; white-space: nowrap;
@@ -16,9 +16,28 @@ button:hover, .btn:hover { background: #4a4a4a; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 button.active { background: #2563eb; border-color: #3b82f6; }
 button.mini { padding: 1px 6px; font-size: 11px; }
+
+/* Compact icon toolbar (scoped so sidebar buttons keep their text sizing) */
+#toolbar button, #toolbar .btn {
+  height: 30px; min-width: 30px; padding: 0 6px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ic { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.brush-wrap { display: inline-flex; align-items: center; gap: 4px; color: #bbb; }
+#brush { width: 64px; }
+#prefix-input { width: 88px; }
+#zoom-info { font-size: 11px; color: #aaa; min-width: 34px; text-align: center; }
+.tb-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: 1px solid #555; border-radius: 4px;
+  cursor: pointer; color: #ddd;
+}
+.tb-toggle:hover { background: #4a4a4a; }
+.tb-toggle input[type=checkbox] { display: none; }
+.tb-toggle:has(input:checked) { background: #2563eb; border-color: #3b82f6; }
+
 input[type=range] { width: 90px; vertical-align: middle; }
-.tb-toggle { display: flex; align-items: center; gap: 4px; color: #bbb; font-size: 12px; white-space: nowrap; }
-.tb-toggle input[type=checkbox] { accent-color: #2563eb; }
 input[type=text], input:not([type]), select {
   background: #1e1e1e; color: #ddd; border: 1px solid #555; border-radius: 3px;
   padding: 3px 6px; font: inherit;

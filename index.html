@@ -6,55 +6,78 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Icon sprite (feather-style, 24x24, stroke=currentColor). Referenced by <use>. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="ic-load" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="ic-export" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></symbol>
+    <symbol id="ic-pen" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5a2 2 0 0 1 3 3L8 19z"/><path d="M14 7l3 3"/></symbol>
+    <symbol id="ic-eraser" viewBox="0 0 24 24"><path d="M15 4l5 5-9 9H6l-2-2a2 2 0 0 1 0-3z"/><path d="M9 10l5 5"/></symbol>
+    <symbol id="ic-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8L4 8"/><path d="M4 4v4h4"/></symbol>
+    <symbol id="ic-brush" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-select" viewBox="0 0 24 24"><path d="M5 3l6 16 2.5-6.5L20 10z"/></symbol>
+    <symbol id="ic-point" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="8"/></symbol>
+    <symbol id="ic-rect" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></symbol>
+    <symbol id="ic-polygon" viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></symbol>
+    <symbol id="ic-nogo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></symbol>
+    <symbol id="ic-waypoint" viewBox="0 0 24 24"><path d="M12 22s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="ic-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="ic-undo" viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/></symbol>
+    <symbol id="ic-redo" viewBox="0 0 24 24"><path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0 0 10h1"/></symbol>
+    <symbol id="ic-fit" viewBox="0 0 24 24"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></symbol>
+    <symbol id="ic-orig" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+    <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></symbol>
+    <symbol id="ic-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9a2.6 2.6 0 1 1 3.6 2.4c-.9.4-1 1-1 1.8"/><circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M15 4v16"/></symbol>
+  </defs>
+</svg>
+
 <header id="toolbar">
   <div class="grp">
-    <label class="btn" title="Pick a folder containing map.pgm + map.yaml">Load folder
+    <label class="btn" title="Load folder — pick a folder containing map.pgm + map.yaml" aria-label="Load folder"><svg class="ic"><use href="#ic-load"/></svg>
       <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
     </label>
-    <button id="export-btn" disabled title="Export Nav2 files + world.toml. Chrome/Edge: pick a folder, files written into a dated subfolder. Firefox/Safari: one .zip download instead.">Export</button>
-    <input id="prefix-input" placeholder="prefix" size="12" title="File name prefix used on export">
+    <button id="export-btn" disabled aria-label="Export" title="Export Nav2 files + world.toml. Chrome/Edge: pick a folder, files written into a dated subfolder. Firefox/Safari: one .zip download instead."><svg class="ic"><use href="#ic-export"/></svg></button>
+    <input id="prefix-input" placeholder="prefix" title="File name prefix used on export">
   </div>
 
   <div class="grp" data-group="pixel">
-    <span class="lbl">Pixel</span>
-    <button data-tool="pen" title="Paint occupied (black)">Pen</button>
-    <button data-tool="eraser" title="Paint free (white)">Eraser</button>
-    <button data-tool="restore" title="Revert to _og.pgm baseline">Restore</button>
-    <label title="Brush diameter in pixels (1 = single pixel)">Brush
+    <button data-tool="pen" aria-label="Pen" title="Pen — paint occupied (black)"><svg class="ic"><use href="#ic-pen"/></svg></button>
+    <button data-tool="eraser" aria-label="Eraser" title="Eraser — paint free (white)"><svg class="ic"><use href="#ic-eraser"/></svg></button>
+    <button data-tool="restore" aria-label="Restore" title="Restore — revert to _og.pgm baseline"><svg class="ic"><use href="#ic-restore"/></svg></button>
+    <label class="brush-wrap" title="Brush diameter in pixels (1 = single pixel)" aria-label="Brush size"><svg class="ic"><use href="#ic-brush"/></svg>
       <input id="brush" type="range" min="1" max="40" value="3"><span id="brush-val">3</span>
     </label>
   </div>
 
   <div class="grp" data-group="shape">
-    <span class="lbl">Shape</span>
-    <button data-tool="select" title="Click an element on the map to select it">Select</button>
-    <button data-tool="point" title="Click to place a single point">Point</button>
-    <button data-tool="rect" title="Drag two corners to define a rectangle">Rect</button>
-    <button data-tool="polygon" title="Click to add vertex, click near start to close">Polygon</button>
-    <button data-tool="nogo" title="Closed polygon rasterized into _keepout.pgm">No-Go</button>
+    <button data-tool="select" aria-label="Select" title="Select — click an element on the map to select it"><svg class="ic"><use href="#ic-select"/></svg></button>
+    <button data-tool="point" aria-label="Point" title="Point — click to place a single point"><svg class="ic"><use href="#ic-point"/></svg></button>
+    <button data-tool="rect" aria-label="Rect" title="Rect — drag two corners to define a rectangle"><svg class="ic"><use href="#ic-rect"/></svg></button>
+    <button data-tool="polygon" aria-label="Polygon" title="Polygon — click to add vertex, click near start to close"><svg class="ic"><use href="#ic-polygon"/></svg></button>
+    <button data-tool="nogo" aria-label="No-Go" title="No-Go — closed polygon rasterized into _keepout.pgm"><svg class="ic"><use href="#ic-nogo"/></svg></button>
     <select id="label-select" title="Label for the next shape"></select>
-    <button id="add-label" title="Add a custom label">+</button>
+    <button id="add-label" class="mini" aria-label="Add label" title="Add a custom label"><svg class="ic"><use href="#ic-add"/></svg></button>
   </div>
 
   <div class="grp" data-group="map">
-    <span class="lbl">Map</span>
-    <button data-tool="waypoint" title="Place a named room/location for world.toml; drag to set the robot's heading">Waypoint</button>
+    <button data-tool="waypoint" aria-label="Waypoint" title="Waypoint — place a named room/location for world.toml; drag to set the robot's heading"><svg class="ic"><use href="#ic-waypoint"/></svg></button>
   </div>
 
   <div class="grp">
-    <button id="undo" title="Undo (Ctrl/Cmd+Z)">↶</button>
-    <button id="redo" title="Redo (Ctrl/Cmd+Shift+Z)">↷</button>
-    <button id="fit" title="Fit map to viewport">Fit</button>
+    <button id="undo" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)"><svg class="ic"><use href="#ic-undo"/></svg></button>
+    <button id="redo" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)"><svg class="ic"><use href="#ic-redo"/></svg></button>
+    <button id="fit" aria-label="Fit" title="Fit map to viewport"><svg class="ic"><use href="#ic-fit"/></svg></button>
     <span id="zoom-info">100%</span>
-    <label class="tb-toggle" title="Overlay the pristine _og.pgm at 60% opacity to compare against your edits">
-      <input id="toggle-orig" type="checkbox"> Orig overlay
+    <label class="tb-toggle" title="Orig overlay — show the pristine _og.pgm at 60% opacity to compare against your edits" aria-label="Toggle original-map overlay">
+      <input id="toggle-orig" type="checkbox"><svg class="ic"><use href="#ic-orig"/></svg>
     </label>
   </div>
 
   <div class="grp" style="margin-left:auto">
-    <button id="cmd-search" title="Command palette — search tools, actions, elements (Ctrl/Cmd+K · F1)">⌘K&nbsp;Search</button>
-    <button id="help-btn" title="Keyboard &amp; mouse shortcuts (?)">?</button>
-    <button id="sidebar-toggle" title="Show / hide the sidebar (Ctrl/Cmd+B)">☰</button>
+    <button id="cmd-search" aria-label="Command palette" title="Command palette — search tools, actions, elements (Ctrl/Cmd+K · F1)"><svg class="ic"><use href="#ic-search"/></svg></button>
+    <button id="help-btn" aria-label="Keyboard shortcuts" title="Keyboard &amp; mouse shortcuts (?)"><svg class="ic"><use href="#ic-help"/></svg></button>
+    <button id="sidebar-toggle" aria-label="Toggle sidebar" title="Show / hide the sidebar (Ctrl/Cmd+B)"><svg class="ic"><use href="#ic-sidebar"/></svg></button>
   </div>
 </header>
 
