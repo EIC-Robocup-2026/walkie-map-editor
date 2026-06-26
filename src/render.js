@@ -34,7 +34,7 @@ export function draw() {
   const W = canvas.width = canvas.clientWidth;
   const H = canvas.height = canvas.clientHeight;
   ctx.fillStyle = '#555'; ctx.fillRect(0, 0, W, H);
-  if (!state.meta) return;
+  if (!state.meta) { drawEmptyState(W, H); return; }
 
   ctx.save();
   ctx.translate(state.view.x, state.view.y);
@@ -55,6 +55,49 @@ export function draw() {
 
   drawScaleBar();
   $('#zoom-info').textContent = `${(state.view.s * 100).toFixed(0)}%`;
+}
+
+// Shown before any map is loaded (and as a drop target).
+function drawEmptyState(W, H) {
+  const active = state._dropActive;
+  const cx = W / 2, cy = H / 2;
+  ctx.save();
+  ctx.strokeStyle = active ? '#3b82f6' : '#777';
+  ctx.setLineDash([10, 8]);
+  ctx.lineWidth = 2;
+  const bw = Math.min(520, W - 80), bh = Math.min(220, H - 80);
+  ctx.strokeRect(cx - bw / 2, cy - bh / 2, bw, bh);
+  ctx.setLineDash([]);
+  ctx.fillStyle = active ? '#bcd' : '#aaa';
+  ctx.textAlign = 'center';
+  ctx.font = '600 18px system-ui, sans-serif';
+  ctx.fillText(active ? 'Drop to load this map folder' : 'Drop a map folder here', cx, cy - 10);
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.fillText('or click “Load folder” · needs a .pgm + .yaml', cx, cy + 16);
+  ctx.fillText('press Ctrl/Cmd+K or F1 for the command palette', cx, cy + 38);
+  ctx.restore();
+  ctx.textAlign = 'left';
+}
+
+// Center the view on an element and zoom to fit its bounds (mirrors fitView).
+export function zoomToElement(el) {
+  if (!state.meta || !el || !el.coords || !el.coords.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [wx, wy] of el.coords) {
+    const p = worldToPx(wx, wy);
+    if (p.px < minX) minX = p.px; if (p.px > maxX) maxX = p.px;
+    if (p.py < minY) minY = p.py; if (p.py > maxY) maxY = p.py;
+  }
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  const bw = Math.max(maxX - minX, 1), bh = Math.max(maxY - minY, 1);
+  // fit the bbox into ~60% of the viewport, but never zoom out past current scale
+  const s = Math.min(Math.max(state.view.s, Math.min(W / bw, H / bh) * 0.6), 80);
+  state.view.s = s;
+  const ccx = (minX + maxX) / 2, ccy = (minY + maxY) / 2;
+  state.view.x = W / 2 - ccx * s;
+  state.view.y = H / 2 - ccy * s;
+  draw();
 }
 
 function drawGrid() {
@@ -123,9 +166,10 @@ function drawElements() {
 function drawElement(e, selected, preview = false) {
   const nogoFill = e.type === 'nogo' || (e.asNogo && e.closed);
   const wp = e.type === 'waypoint';
+  const hovered = !selected && state.hoverId === e.id;   // list↔canvas hover link
   const wpCol = e.role === 'room' ? '#f59e0b' : e.role === 'location' ? '#34d399' : '#a78bfa';
-  const col = selected ? '#ffeb3b' : nogoFill ? '#ff4444' : wp ? wpCol : '#22d3ee';
-  ctx.lineWidth = (selected ? 2 : 1.5) / state.view.s;
+  const col = selected ? '#ffeb3b' : hovered ? '#ffffff' : nogoFill ? '#ff4444' : wp ? wpCol : '#22d3ee';
+  ctx.lineWidth = (selected ? 2 : hovered ? 2.5 : 1.5) / state.view.s;
   ctx.strokeStyle = col;
   ctx.fillStyle = nogoFill ? 'rgba(255,68,68,0.25)' : 'rgba(34,211,238,0.15)';
   const pts = e.coords.map(([wx, wy]) => worldToPx(wx, wy));

@@ -96,6 +96,48 @@ export async function loadFolder(files) {
   status(`loaded ${pgm.name} ${parsed.w}×${parsed.h}${ogNote}; elements: ${loadedCount}`);
 }
 
+// Load a drag-and-dropped folder. Uses the webkitGetAsEntry directory API to
+// gather the folder's files, tagging each with a synthetic webkitRelativePath
+// (<dir>/<file>) so loadFolder's name-derivation works exactly as for the
+// folder picker. Falls back to a flat file list if the entry API is missing.
+export async function loadDroppedItems(dataTransfer) {
+  const items = dataTransfer && dataTransfer.items;
+  const getEntry = items && items.length && items[0].webkitGetAsEntry;
+  if (!getEntry) {
+    if (dataTransfer && dataTransfer.files && dataTransfer.files.length) {
+      await loadFolder([...dataTransfer.files]);
+    } else { status('drop a folder containing map.pgm + map.yaml'); }
+    return;
+  }
+  const entries = [];
+  for (const it of items) { const e = it.webkitGetAsEntry && it.webkitGetAsEntry(); if (e) entries.push(e); }
+
+  const files = [];
+  const fileOf = (entry) => new Promise((res) => entry.file(
+    (f) => { try { Object.defineProperty(f, 'webkitRelativePath', { value: entry.fullPath.replace(/^\//, '') }); } catch {} res(f); },
+    () => res(null)));
+  const readDir = (dirEntry) => new Promise((res) => {
+    const reader = dirEntry.createReader();
+    const acc = [];
+    const step = () => reader.readEntries((batch) => {
+      if (!batch.length) return res(acc);
+      acc.push(...batch); step();   // readEntries returns in chunks; drain until empty
+    }, () => res(acc));
+    step();
+  });
+
+  for (const entry of entries) {
+    if (entry.isFile) { const f = await fileOf(entry); if (f) files.push(f); }
+    else if (entry.isDirectory) {
+      for (const child of await readDir(entry)) {
+        if (child.isFile) { const f = await fileOf(child); if (f) files.push(f); }
+      }
+    }
+  }
+  if (!files.length) { status('drop a folder containing map.pgm + map.yaml'); return; }
+  await loadFolder(files);
+}
+
 export function normalizeElement(e) {
   const base = {
     id: e.id || `e${state.nextId++}`,

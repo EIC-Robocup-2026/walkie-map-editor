@@ -50,6 +50,12 @@
       <input id="toggle-orig" type="checkbox"> Orig overlay
     </label>
   </div>
+
+  <div class="grp" style="margin-left:auto">
+    <button id="cmd-search" title="Command palette — search tools, actions, elements (Ctrl/Cmd+K · F1)">⌘K&nbsp;Search</button>
+    <button id="help-btn" title="Keyboard &amp; mouse shortcuts (?)">?</button>
+    <button id="sidebar-toggle" title="Show / hide the sidebar (Ctrl/Cmd+B)">☰</button>
+  </div>
 </header>
 
 <main>
@@ -67,6 +73,7 @@
           <input id="toggle-ids" type="checkbox" checked> IDs
         </label>
       </summary>
+      <input id="elem-search" class="elem-search" type="text" placeholder="filter elements… (id / label / kind)">
       <ul id="elem-list"></ul>
     </details>
 

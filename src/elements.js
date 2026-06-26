@@ -65,6 +65,14 @@ export function toggleAsNogo(id) {
   draw();
 }
 
+// Delete every element (confirm first). Shared by the toolbar Clear button and
+// the "Clear elements" palette command.
+export function clearAllElements() {
+  if (!state.elements.length) return;
+  if (!confirm(`delete all ${state.elements.length} elements?`)) return;
+  for (const e of [...state.elements]) deleteElement(e.id);
+}
+
 // Apply a patch of fields to an element as one undoable elem-mod step.
 export function updateElementFields(id, patch) {
   const el = state.elements.find(e => e.id === id);

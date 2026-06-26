@@ -121,6 +121,23 @@ These round-trip through `_element.json` so re-exporting never loses them.
   Select, Point, Rect, Polygon, No-Go, Waypoint (the binding is shown in each
   tool button's tooltip).
 
+**Command palette & navigation**
+
+- **`Ctrl/Cmd`+`K`** or **`F1`** — open the command palette (toolbar **⌘K Search**
+  button too). Fuzzy-search every tool, action, and view toggle (each shows its
+  keybind), **jump to a drawn element** by `#id`/label (selects + zooms to it), or
+  **set the active label**. `↑`/`↓` to move, `Enter` to run, `Esc` to close.
+  `Ctrl/Cmd`+`Shift`+`P` also works in Chromium browsers (Firefox reserves it for a
+  private window, so use `Ctrl/Cmd`+`K` / `F1` there).
+- **`?`** — keyboard & mouse shortcuts cheat-sheet (toolbar **?** button).
+- **`Ctrl/Cmd`+`B`** — collapse / expand the sidebar (toolbar **☰** button);
+  remembered across sessions.
+- **Load by drag-and-drop** — drop a map folder onto the canvas (an empty-state
+  prompt shows when nothing is loaded).
+- **Elements panel** — a filter box narrows the list by id/label/kind; the **⌖**
+  button on a row zooms the view to that element; hovering a row highlights it on
+  the canvas.
+
 **History**
 
 - Ctrl/Cmd + Z — undo

@@ -7,8 +7,10 @@ import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
 import { draw, brushRadius } from './render.js';
 import { addElement, deleteElement, hitTest, updateElementFields, kindOf, isVisible } from './elements.js';
 import { pushUndo, undo, redoFn } from './history.js';
-import { status, rebuildElemList, rebuildInspector, currentLabel } from './ui.js';
+import { status, rebuildElemList, rebuildInspector, currentLabel, toggleSidebar } from './ui.js';
 import { defaultWaypointFields } from './io.js';
+import { openPalette, isPaletteOpen } from './palette.js';
+import { openCheatsheet, isCheatsheetOpen } from './cheatsheet.js';
 
 // Live binding read by render.drawElements / render.drawCursor.
 export let cursorPx = null;
@@ -278,7 +280,19 @@ window.addEventListener('keydown', (ev) => {
   // Don't hijack keys (Backspace/Delete -> deleteElement, Ctrl+Z -> undo) while
   // the user is typing in any form control — incl. the vocab <textarea>s and the
   // inspector role/room <select>s, not just <input>.
+  // Overlays own their own keys while open.
+  if (isPaletteOpen() || isCheatsheetOpen()) return;
+  // Global triggers — must work even while a sidebar field has focus, so these
+  // come BEFORE the typing-guard. Ctrl/Cmd+K and F1 are reliable; Ctrl/Cmd+Shift+P
+  // is best-effort (Firefox usually steals it for a private window).
+  const mod = ev.ctrlKey || ev.metaKey;
+  if ((mod && (ev.key === 'k' || ev.key === 'K')) || ev.key === 'F1'
+      || (mod && ev.shiftKey && ev.code === 'KeyP')) { ev.preventDefault(); openPalette(); return; }
+  if (mod && (ev.key === 'b' || ev.key === 'B')) { ev.preventDefault(); toggleSidebar(); return; }
+
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(ev.target.tagName) || ev.target.isContentEditable) return;
+  // ? opens the shortcuts cheat-sheet (after the guard, so it types normally in fields).
+  if (ev.key === '?') { ev.preventDefault(); openCheatsheet(); return; }
   // Shift+1…9/0/-/= quick-selects a tool (by .code, so it's keyboard-layout
   // independent). Plain Shift only — Ctrl/Cmd+Shift+Z stays redo.
   if (ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {

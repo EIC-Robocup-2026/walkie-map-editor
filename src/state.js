@@ -55,6 +55,12 @@ export const state = {
   showIds: true,
   // Overlay the pristine _og.pgm at 60% opacity (Khemin's request) to see edits.
   showOriginalOverlay: false,
+  // UI navigation: hovered element (list↔canvas highlight), sidebar collapse,
+  // element-list search filter, and a transient drag-over flag for the drop zone.
+  hoverId: null,
+  sidebarCollapsed: false,
+  elemFilter: '',
+  _dropActive: false,
   // monotonic element-id counter (was a module-level `let` in the monolith).
   nextId: 1,
 };

@@ -10,17 +10,24 @@ import {
 import { $, canvas } from './dom.js';
 import { canon, splitList } from './pure.js';
 import { kindOf, isVisible, deleteElement, renameElement, toggleAsNogo, updateElementFields } from './elements.js';
-import { draw } from './render.js';
+import { draw, zoomToElement } from './render.js';
 
 // ───── Element list ─────────────────────────────────────────────────
 
 export function rebuildElemList() {
   const ul = $('#elem-list');
   while (ul.firstChild) ul.removeChild(ul.firstChild);
+  const q = (state.elemFilter || '').toLowerCase().trim();
+  let shown = 0;
   for (const e of state.elements) {
+    if (q && !(`#${e.id} ${e.label} ${kindOf(e)}`).toLowerCase().includes(q)) continue;
+    shown++;
     const li = document.createElement('li');
     if (state.selected === e.id) li.className = 'sel';
     if (!isVisible(e)) li.classList.add('hidden');
+    // Hover a row to highlight the matching element on the canvas.
+    li.onmouseenter = () => { state.hoverId = e.id; draw(); };
+    li.onmouseleave = () => { if (state.hoverId === e.id) { state.hoverId = null; draw(); } };
 
     const main = document.createElement('span');
     main.className = 'main';
@@ -45,6 +52,10 @@ export function rebuildElemList() {
       nogoBtn.onclick = (ev) => { ev.stopPropagation(); toggleAsNogo(e.id); };
       actions.appendChild(nogoBtn);
     }
+    const zoomBtn = document.createElement('button');
+    zoomBtn.className = 'mini'; zoomBtn.textContent = '⌖'; zoomBtn.title = 'zoom to element';
+    zoomBtn.onclick = (ev) => { ev.stopPropagation(); state.selected = e.id; rebuildElemList(); rebuildInspector(); zoomToElement(e); };
+    actions.appendChild(zoomBtn);
     const x = document.createElement('span');
     x.className = 'x'; x.textContent = '×';
     actions.appendChild(x);
@@ -68,7 +79,7 @@ export function rebuildElemList() {
     x.onclick = (ev) => { ev.stopPropagation(); deleteElement(e.id); };
     ul.appendChild(li);
   }
-  $('#elem-count').textContent = state.elements.length;
+  $('#elem-count').textContent = q ? `${shown}/${state.elements.length}` : state.elements.length;
 }
 
 // ───── Visibility (label + kind filters) ────────────────────────────
@@ -369,6 +380,24 @@ export function updateInfo() {
 }
 
 export function status(t) { $('#status').textContent = t; }
+
+// Collapse/expand the sidebar (toggles a body class the CSS keys off). Reading
+// canvas.clientWidth in draw() forces the reflow, so the canvas resizes cleanly.
+export function toggleSidebar(force) {
+  state.sidebarCollapsed = (force === undefined) ? !state.sidebarCollapsed : !!force;
+  document.body.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+  const btn = $('#sidebar-toggle'); if (btn) btn.classList.toggle('active', state.sidebarCollapsed);
+  try { localStorage.setItem('walkie-sidebar', state.sidebarCollapsed ? '1' : '0'); } catch {}
+  draw();
+}
+
+export function restoreSidebar() {
+  let v = false;
+  try { v = localStorage.getItem('walkie-sidebar') === '1'; } catch {}
+  state.sidebarCollapsed = v;
+  document.body.classList.toggle('sidebar-collapsed', v);
+  const btn = $('#sidebar-toggle'); if (btn) btn.classList.toggle('active', v);
+}
 
 export function fitView() {
   if (!state.meta) return;

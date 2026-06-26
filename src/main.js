@@ -5,16 +5,18 @@
 'use strict';
 
 import { state, TOOL_ORDER, TOOL_SHORTCUT_KEYS } from './state.js';
-import { $ } from './dom.js';
+import { $, canvas } from './dom.js';
 import { draw } from './render.js';
-import { loadFolder, exportAll } from './io.js';
+import { loadFolder, exportAll, loadDroppedItems } from './io.js';
 import { undo, redoFn } from './history.js';
 import { setTool } from './input.js';
-import { deleteElement } from './elements.js';
+import { clearAllElements } from './elements.js';
 import {
   loadLabels, rebuildLabelSelect, rebuildVisibility, rebuildInspector,
-  rebuildVocabUI, fitView, status,
+  rebuildVocabUI, rebuildElemList, fitView, status, toggleSidebar, restoreSidebar,
 } from './ui.js';
+import { openPalette } from './palette.js';
+import { openCheatsheet } from './cheatsheet.js';
 import { runSelfCheck } from './tests.js';
 
 // ───── Toolbar / control wiring ─────────────────────────────────────
@@ -34,13 +36,30 @@ $('#add-label').addEventListener('click', () => {
 $('#undo').addEventListener('click', undo);
 $('#redo').addEventListener('click', redoFn);
 $('#fit').addEventListener('click', fitView);
-$('#clear-elems').addEventListener('click', () => {
-  if (!state.elements.length) return;
-  if (!confirm(`delete all ${state.elements.length} elements?`)) return;
-  for (const e of [...state.elements]) deleteElement(e.id);
-});
+$('#clear-elems').addEventListener('click', clearAllElements);
 $('#toggle-ids').addEventListener('change', (ev) => { state.showIds = ev.target.checked; draw(); });
 $('#toggle-orig').addEventListener('change', (ev) => { state.showOriginalOverlay = ev.target.checked; draw(); });
+
+// Command palette / cheat-sheet / sidebar controls
+$('#cmd-search').addEventListener('click', openPalette);
+$('#help-btn').addEventListener('click', openCheatsheet);
+$('#sidebar-toggle').addEventListener('click', () => toggleSidebar());
+$('#elem-search').addEventListener('input', (ev) => { state.elemFilter = ev.target.value; rebuildElemList(); });
+
+// Drag-and-drop a map folder onto the canvas.
+const dropZone = $('main') || canvas;
+['dragenter', 'dragover'].forEach(t => dropZone.addEventListener(t, (ev) => {
+  ev.preventDefault();
+  if (!state.meta) { state._dropActive = true; draw(); }
+}));
+dropZone.addEventListener('dragleave', (ev) => {
+  if (ev.target === dropZone) { state._dropActive = false; draw(); }
+});
+dropZone.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  state._dropActive = false;
+  loadDroppedItems(ev.dataTransfer);
+});
 
 document.querySelectorAll('button[data-tool]').forEach(b => {
   b.addEventListener('click', () => setTool(b.dataset.tool));
@@ -56,13 +75,14 @@ window.addEventListener('resize', () => draw());
 // ───── Init sequence ────────────────────────────────────────────────
 
 loadLabels();
+restoreSidebar();
 rebuildLabelSelect();
 rebuildVisibility();
 rebuildInspector();
 rebuildVocabUI();
 setTool('pen');
 draw();
-status('drag a map folder to begin');
+status('drag a map folder to begin · press Ctrl/Cmd+K or F1 for commands, ? for shortcuts');
 
 // Self-check: window._test()
 window._test = runSelfCheck;
