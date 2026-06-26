@@ -53,9 +53,9 @@ Click **Load folder** and pick a folder containing:
 
 | Tool | Click behaviour |
 |---|---|
-| Select | click an element on the map to highlight it |
+| Select | click an element to highlight it, then drag a yellow node handle to move that vertex |
 | Point | single click places one point |
-| Rect | press and drag two corners |
+| Rect | press and drag two corners (preview shows the live bounding box) |
 | Polygon | left-click adds vertex; click near start to close |
 | No-Go | polygon tagged as `nogo`, exported into `*_keepout.pgm` |
 
@@ -108,8 +108,35 @@ These round-trip through `_element.json` so re-exporting never loses them.
 - Mouse wheel — zoom at cursor
 - Middle-drag, Alt-drag, or Ctrl-drag — pan
 - **Fit** button — fit the whole map
+- **Orig overlay** toggle — draws the pristine `_og.pgm` at 60% opacity on top of
+  the edited map, so you can see exactly what you changed
 - Red/green crosshair = world origin `(0, 0)`
 - Bottom-left = grid step size in meters / centimetres
+- The brush cursor outline is colour-inverted against the map, so it stays
+  visible over both free (white) and occupied (black) space
+
+**Tool shortcuts**
+
+- `Shift`+`1`…`9` quick-select tools, in toolbar order: Pen, Eraser, Restore,
+  Select, Point, Rect, Polygon, No-Go, Waypoint (the binding is shown in each
+  tool button's tooltip).
+
+**Command palette & navigation**
+
+- **`Ctrl/Cmd`+`K`** or **`F1`** — open the command palette (toolbar **⌘K Search**
+  button too). Fuzzy-search every tool, action, and view toggle (each shows its
+  keybind), **jump to a drawn element** by `#id`/label (selects + zooms to it), or
+  **set the active label**. `↑`/`↓` to move, `Enter` to run, `Esc` to close.
+  `Ctrl/Cmd`+`Shift`+`P` also works in Chromium browsers (Firefox reserves it for a
+  private window, so use `Ctrl/Cmd`+`K` / `F1` there).
+- **`?`** — keyboard & mouse shortcuts cheat-sheet (toolbar **?** button).
+- **`Ctrl/Cmd`+`B`** — collapse / expand the sidebar (toolbar **☰** button);
+  remembered across sessions.
+- **Load by drag-and-drop** — drop a map folder onto the canvas (an empty-state
+  prompt shows when nothing is loaded).
+- **Elements panel** — a filter box narrows the list by id/label/kind; the **⌖**
+  button on a row zooms the view to that element; hovering a row highlights it on
+  the canvas.
 
 **History**
 
@@ -120,6 +147,11 @@ These round-trip through `_element.json` so re-exporting never loses them.
 
 - Switch to **Select** tool, then click an element on the map
 - Or click an item in the sidebar
+- Yellow square handles appear on the selected element — drag one to move that
+  vertex (point/waypoint = its position). **Drag the element's body** (its line or
+  interior) to move the whole shape at once. The status bar at the bottom shows the
+  element id and every node's world coordinates as you edit; each move is one undo
+  step.
 - Double-click a sidebar item to rename the label (Enter commits, Esc cancels)
 - `Delete` / `Backspace` — remove the selected element
 - `×` in the sidebar — remove that element
@@ -137,9 +169,11 @@ to silence it.
 
 ## Export
 
-Click **Export**. The browser asks where to save. The editor creates a
-subfolder named `<prefix>_YYYYMMDD_HHMM/` inside the chosen directory and
-writes six files into it:
+Click **Export**. The browser asks which directory to save into (e.g.
+`~/map_download`). The editor creates a subfolder named
+`<prefix>_export_<YYYYMMDD_HHMMSS>/` inside that chosen directory and writes
+seven files into it. The `<prefix>` defaults to the **imported folder's name**
+(editable in the toolbar prefix box).
 
 | File | Content |
 |---|---|
@@ -148,6 +182,7 @@ writes six files into it:
 | `<prefix>.yaml` | Nav2 metadata, `image:` points at `<prefix>.pgm` |
 | `<prefix>_element.json` | labels + elements + arena vocab (world coords) |
 | `<prefix>_keepout.pgm` | white image with all no-go and `asNogo` areas filled black |
+| `<prefix>_keepout.yaml` | Nav2 metadata for the keepout layer (same as `<prefix>.yaml`, `image:` points at `<prefix>_keepout.pgm`) |
 | `<prefix>_world.toml` | named waypoints + vocab for `walkie-agent-v2` (see below) |
 
 Before writing, the editor validates the `world.toml` data. Issues that would
@@ -161,9 +196,13 @@ confirm through.
 Re-import the exported subfolder to round-trip — element geometry, waypoint
 fields, and arena vocab are all preserved.
 
-**Browsers without `showDirectoryPicker`** (Firefox, Safari) fall back to
-individual downloads, each prefixed with the folder name so you can group
-them manually.
+**Browsers without `showDirectoryPicker`** (Firefox, Safari) can't open an
+OS folder picker from JavaScript, so they instead download a single
+`<prefix>_export_<YYYYMMDD_HHMMSS>.zip` that unzips into the same folder with
+all seven files inside. To choose *where* that zip lands, enable Firefox's
+**Settings → General → Downloads → "Always ask you where to save files"** —
+you'll get a Save-As dialog for the one download. For direct write-into-a-
+folder, use Chrome / Edge / Brave (over `localhost` or HTTPS).
 
 ## `world.toml` — walkie-agent-v2 map
 
@@ -258,12 +297,13 @@ own save format; the robot consumes `world.toml`.
 
 - **Safari** has weak `webkitdirectory` support. Fallback: shift/cmd-click to
   pick the files individually in the folder dialog.
-- **Firefox / Safari** lack `showDirectoryPicker`, so export falls back to
-  five separate downloads.
+- **Firefox / Safari** lack `showDirectoryPicker`, so export falls back to a
+  single `.zip` download (they can't pick a destination folder from JS).
 - **Restore tool** requires `*_og.pgm` to revert to a pristine baseline.
   Without it, Restore reverts only to the as-loaded state of the editable PGM.
-- **Vertex editing** after a polygon is committed is not supported — delete
-  and redraw.
+- **Vertex editing** moves existing vertices (Select tool, drag a handle) but
+  doesn't add or delete vertices on a committed shape — delete and redraw to
+  change the vertex count.
 - Not profiled above ~5000 px on a side.
 
 ## Self-check
