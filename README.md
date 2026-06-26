@@ -154,7 +154,7 @@ to silence it.
 Click **Export**. The browser asks which directory to save into (e.g.
 `~/map_download`). The editor creates a subfolder named
 `<prefix>_export_<YYYYMMDD_HHMMSS>/` inside that chosen directory and writes
-six files into it. The `<prefix>` defaults to the **imported folder's name**
+seven files into it. The `<prefix>` defaults to the **imported folder's name**
 (editable in the toolbar prefix box).
 
 | File | Content |
@@ -164,6 +164,7 @@ six files into it. The `<prefix>` defaults to the **imported folder's name**
 | `<prefix>.yaml` | Nav2 metadata, `image:` points at `<prefix>.pgm` |
 | `<prefix>_element.json` | labels + elements + arena vocab (world coords) |
 | `<prefix>_keepout.pgm` | white image with all no-go and `asNogo` areas filled black |
+| `<prefix>_keepout.yaml` | Nav2 metadata for the keepout layer (same as `<prefix>.yaml`, `image:` points at `<prefix>_keepout.pgm`) |
 | `<prefix>_world.toml` | named waypoints + vocab for `walkie-agent-v2` (see below) |
 
 Before writing, the editor validates the `world.toml` data. Issues that would
@@ -180,7 +181,7 @@ fields, and arena vocab are all preserved.
 **Browsers without `showDirectoryPicker`** (Firefox, Safari) can't open an
 OS folder picker from JavaScript, so they instead download a single
 `<prefix>_export_<YYYYMMDD_HHMMSS>.zip` that unzips into the same folder with
-all six files inside. To choose *where* that zip lands, enable Firefox's
+all seven files inside. To choose *where* that zip lands, enable Firefox's
 **Settings → General → Downloads → "Always ask you where to save files"** —
 you'll get a Save-As dialog for the one download. For direct write-into-a-
 folder, use Chrome / Edge / Brave (over `localhost` or HTTPS).

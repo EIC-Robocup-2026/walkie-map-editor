@@ -130,6 +130,9 @@ function dateStamp() {
 
 function buildExportFiles(prefix) {
   const meta = { ...state.meta, image: `${prefix}.pgm` };
+  // Keepout layer's own Nav2 metadata: identical to the map yaml, only `image`
+  // points at the keepout PGM (so it can be loaded as a separate costmap layer).
+  const keepoutMeta = { ...state.meta, image: `${prefix}_keepout.pgm` };
   const enc = new TextEncoder();
   return [
     [`${prefix}_og.pgm`, writePGM(state.w, state.h, state.original)],
@@ -138,6 +141,7 @@ function buildExportFiles(prefix) {
     [`${prefix}_element.json`,
       enc.encode(JSON.stringify({ labels: state.labels, elements: state.elements, vocab: state.vocab }, null, 2))],
     [`${prefix}_keepout.pgm`, writePGM(state.w, state.h, buildKeepout())],
+    [`${prefix}_keepout.yaml`, enc.encode(writeYAML(keepoutMeta))],
     [`${prefix}_world.toml`, enc.encode(buildWorldToml())],
   ];
 }
