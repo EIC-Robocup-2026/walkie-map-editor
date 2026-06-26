@@ -2,10 +2,10 @@
 // the canvas/window event listeners. Tool selection lives here too.
 'use strict';
 
-import { state, markDirty, FREE, OCC } from './state.js';
+import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES } from './state.js';
 import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
 import { draw, brushRadius } from './render.js';
-import { addElement, deleteElement, hitTest } from './elements.js';
+import { addElement, deleteElement, hitTest, updateElementFields, kindOf, isVisible } from './elements.js';
 import { pushUndo, undo, redoFn } from './history.js';
 import { status, rebuildElemList, rebuildInspector, currentLabel } from './ui.js';
 import { defaultWaypointFields } from './io.js';
@@ -14,6 +14,30 @@ import { defaultWaypointFields } from './io.js';
 export let cursorPx = null;
 let panning = null;
 let painting = false;
+// Active vertex drag: { id, index, before } where `before` is a deep copy of the
+// element's coords at grab time, so the whole move commits as one undo step.
+let nodeDrag = null;
+
+// Index of the selected element's vertex under cursor (screen-space px), or -1.
+function nodeAt(el, p) {
+  const tol = 8 / state.view.s;
+  let best = -1, bestD = tol;
+  for (let i = 0; i < el.coords.length; i++) {
+    const np = worldToPx(el.coords[i][0], el.coords[i][1]);
+    const d = Math.hypot(np.px - p.px, np.py - p.py);
+    if (d <= bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+// Bottom-of-screen readout for the selected element + (optionally) the node
+// being dragged. Lists every vertex's world coords; the active one is marked ●.
+function selReadout(el, active) {
+  const pts = el.coords
+    .map((c, i) => `${i === active ? '●' : '○'}${i}:(${(+c[0]).toFixed(2)}, ${(+c[1]).toFixed(2)})`)
+    .join('  ');
+  return `selected #${el.id} ${el.label} [${kindOf(el)}] — drag a yellow handle to move · ${pts}`;
+}
 
 function paintBrush(px, py) {
   const r = brushRadius();
@@ -100,6 +124,16 @@ canvas.addEventListener('mousedown', (ev) => {
   const p = screenToPx(ev.clientX, ev.clientY);
 
   if (state.tool === 'select') {
+    // Grabbing a handle of the already-selected element starts a vertex move
+    // (takes priority over re-selecting whatever is underneath).
+    const sel = state.selected && state.elements.find(e => e.id === state.selected);
+    if (sel && isVisible(sel)) {
+      const idx = nodeAt(sel, p);
+      if (idx >= 0) {
+        nodeDrag = { id: sel.id, index: idx, before: sel.coords.map(c => [...c]) };
+        return;
+      }
+    }
     const id = hitTest(w.wx, w.wy);
     state.selected = id;
     rebuildElemList();
@@ -120,7 +154,10 @@ canvas.addEventListener('mousedown', (ev) => {
   } else if (state.tool === 'point') {
     addElement({ type: 'point', label: currentLabel(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
   } else if (state.tool === 'rect') {
-    state.drawing = { id: 'tmp', label: currentLabel(), type: 'rect', coords: [[w.wx, w.wy], [w.wx, w.wy]], closed: true, asNogo: false };
+    // Store the fixed start corner; coords carries all 4 bbox corners so the
+    // preview renders as a rectangle (closed poly) rather than a diagonal line.
+    state.drawing = { id: 'tmp', label: currentLabel(), type: 'rect', start: [w.wx, w.wy],
+      coords: [[w.wx, w.wy], [w.wx, w.wy], [w.wx, w.wy], [w.wx, w.wy]], closed: true, asNogo: false };
   } else if (state.tool === 'polygon' || state.tool === 'nogo') {
     if (!state.drawing) {
       const t = state.tool === 'nogo' ? 'nogo' : 'polygon';
@@ -150,13 +187,27 @@ canvas.addEventListener('mousemove', (ev) => {
   const p = screenToPx(ev.clientX, ev.clientY);
   const w = screenToWorld(ev.clientX, ev.clientY);
   cursorPx = p;
-  status(`world (${w.wx.toFixed(3)}, ${w.wy.toFixed(3)}) m   px (${Math.floor(p.px)}, ${Math.floor(p.py)})   tool: ${state.tool}`);
+
+  // Dragging a vertex: move it live and show its world coords in the readout.
+  if (nodeDrag) {
+    const el = state.elements.find(e => e.id === nodeDrag.id);
+    if (el) { el.coords[nodeDrag.index] = [w.wx, w.wy]; status(selReadout(el, nodeDrag.index)); }
+    draw();
+    return;
+  }
+
+  // Readout: when a shape is selected for editing, show its node coords (bottom
+  // text box); otherwise the usual cursor world/pixel position.
+  const selEl = state.tool === 'select' && state.selected && state.elements.find(e => e.id === state.selected);
+  if (selEl) status(selReadout(selEl, nodeAt(selEl, p)));
+  else status(`world (${w.wx.toFixed(3)}, ${w.wy.toFixed(3)}) m   px (${Math.floor(p.px)}, ${Math.floor(p.py)})   tool: ${state.tool}`);
 
   if (painting) {
     strokeTo(p.px, p.py);
   } else if (state.drawing) {
     if (state.drawing.type === 'rect') {
-      state.drawing.coords[1] = [w.wx, w.wy];
+      const [ax, ay] = state.drawing.start;
+      state.drawing.coords = [[ax, ay], [w.wx, ay], [w.wx, w.wy], [ax, w.wy]];
     } else if (state.drawing.type === 'waypoint') {
       const [ax, ay] = state.drawing.coords[0];
       const dx = w.wx - ax, dy = w.wy - ay;
@@ -168,6 +219,18 @@ canvas.addEventListener('mousemove', (ev) => {
 
 canvas.addEventListener('mouseup', (ev) => {
   if (panning) { panning = null; return; }
+  if (nodeDrag) {
+    const el = state.elements.find(e => e.id === nodeDrag.id);
+    if (el) {
+      const finalCoords = el.coords.map(c => [...c]);
+      el.coords = nodeDrag.before;                       // restore so the diff is clean
+      updateElementFields(el.id, { coords: finalCoords }); // one undoable elem-mod
+      rebuildInspector();                                  // refresh waypoint pos display
+    }
+    nodeDrag = null;
+    draw();
+    return;
+  }
   if (painting) {
     painting = false;
     state.prevPaintPt = null;
@@ -180,9 +243,8 @@ canvas.addEventListener('mouseup', (ev) => {
     state.currentStroke = null;
   }
   if (state.tool === 'rect' && state.drawing) {
-    const c = state.drawing.coords;
     const el = { type: 'rect', label: currentLabel(), asNogo: false,
-      coords: [[c[0][0], c[0][1]], [c[1][0], c[0][1]], [c[1][0], c[1][1]], [c[0][0], c[1][1]]], closed: true };
+      coords: state.drawing.coords.map(c => [...c]), closed: true };  // already 4 bbox corners
     state.drawing = null;
     addElement(el);
   }
@@ -217,6 +279,12 @@ window.addEventListener('keydown', (ev) => {
   // the user is typing in any form control — incl. the vocab <textarea>s and the
   // inspector role/room <select>s, not just <input>.
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(ev.target.tagName) || ev.target.isContentEditable) return;
+  // Shift+1…9/0/-/= quick-selects a tool (by .code, so it's keyboard-layout
+  // independent). Plain Shift only — Ctrl/Cmd+Shift+Z stays redo.
+  if (ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    const idx = TOOL_SHORTCUT_CODES.indexOf(ev.code);
+    if (idx >= 0 && idx < TOOL_ORDER.length) { ev.preventDefault(); setTool(TOOL_ORDER[idx]); return; }
+  }
   if (ev.key === 'Escape') {
     if (state.drawing) {
       if (state.drawing.type === 'rect' || state.drawing.type === 'waypoint') { state.drawing = null; draw(); }

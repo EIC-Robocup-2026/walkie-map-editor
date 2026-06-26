@@ -8,7 +8,7 @@ import {
   parsePGM, writePGM, parseYAML, writeYAML, rasterPoly,
   buildWorldTomlFrom, worldIssuesFrom, normalizeVocab,
 } from './pure.js';
-import { renderPixels } from './render.js';
+import { renderPixels, renderOriginal } from './render.js';
 import {
   rebuildLabelSelect, rebuildElemList, rebuildVisibility, rebuildInspector,
   rebuildVocabUI, updateInfo, status, fitView,
@@ -26,6 +26,15 @@ export async function loadFolder(files) {
   if (!pgm) { status('error: no .pgm in folder'); return; }
   if (!yaml) { status('error: no .yaml in folder'); return; }
 
+  // The imported folder's own name is the most meaningful map name — maps are
+  // often named "map.pgm" inside an arena-named folder, so deriving the prefix
+  // from the .pgm filename alone always yielded "map". webkitRelativePath is
+  // "<folder>/<file>" for a directory pick.
+  let folderName = '';
+  for (const f of files) {
+    if (f.webkitRelativePath) { folderName = f.webkitRelativePath.split('/')[0]; break; }
+  }
+
   const parsed = parsePGM(await pgm.arrayBuffer());
   const meta = parseYAML(await yaml.text());
 
@@ -41,7 +50,7 @@ export async function loadFolder(files) {
     state.original = parsed.pixels.slice();
     ogNote = ' (no _og.pgm; Restore = as-loaded)';
   }
-  state.prefix = pgm.name.replace(/_og\.pgm$|\.pgm$/i, '') || 'map';
+  state.prefix = folderName || pgm.name.replace(/_og\.pgm$|\.pgm$/i, '') || 'map';
   $('#prefix-input').value = state.prefix;
 
   state.elements = [];
@@ -75,6 +84,7 @@ export async function loadFolder(files) {
   rebuildInspector();
   rebuildVocabUI();
   renderPixels();
+  renderOriginal();   // populate the overlay buffer (original never mutates after load)
   fitView();
   updateInfo();
   $('#export-btn').disabled = false;
@@ -114,7 +124,7 @@ export function defaultWaypointFields(e = {}) {
 function dateStamp() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
 function buildExportFiles(prefix) {
@@ -147,11 +157,13 @@ export async function exportAll() {
     return;
   }
   const prefix = ($('#prefix-input').value || 'map').replace(/[^\w\-]/g, '_');
-  const folderName = `${prefix}_${dateStamp()}`;
+  const folderName = `${prefix}_export_${dateStamp()}`;
   const files = buildExportFiles(prefix);
 
   if (window.showDirectoryPicker) {
     try {
+      // User picks the parent directory (e.g. ~/map_download); we create the
+      // dated subfolder <prefix>_export_<DateTime>/ inside it and write all files there.
       const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
       const subDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
       for (const [name, bytes] of files) {

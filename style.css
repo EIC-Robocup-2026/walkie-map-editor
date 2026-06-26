@@ -17,6 +17,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 button.active { background: #2563eb; border-color: #3b82f6; }
 button.mini { padding: 1px 6px; font-size: 11px; }
 input[type=range] { width: 90px; vertical-align: middle; }
+.tb-toggle { display: flex; align-items: center; gap: 4px; color: #bbb; font-size: 12px; white-space: nowrap; }
+.tb-toggle input[type=checkbox] { accent-color: #2563eb; }
 input[type=text], input:not([type]), select {
   background: #1e1e1e; color: #ddd; border: 1px solid #555; border-radius: 3px;
   padding: 3px 6px; font: inherit;

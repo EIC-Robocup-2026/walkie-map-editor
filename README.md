@@ -53,9 +53,9 @@ Click **Load folder** and pick a folder containing:
 
 | Tool | Click behaviour |
 |---|---|
-| Select | click an element on the map to highlight it |
+| Select | click an element to highlight it, then drag a yellow node handle to move that vertex |
 | Point | single click places one point |
-| Rect | press and drag two corners |
+| Rect | press and drag two corners (preview shows the live bounding box) |
 | Polygon | left-click adds vertex; click near start to close |
 | No-Go | polygon tagged as `nogo`, exported into `*_keepout.pgm` |
 
@@ -108,8 +108,18 @@ These round-trip through `_element.json` so re-exporting never loses them.
 - Mouse wheel — zoom at cursor
 - Middle-drag, Alt-drag, or Ctrl-drag — pan
 - **Fit** button — fit the whole map
+- **Orig overlay** toggle — draws the pristine `_og.pgm` at 60% opacity on top of
+  the edited map, so you can see exactly what you changed
 - Red/green crosshair = world origin `(0, 0)`
 - Bottom-left = grid step size in meters / centimetres
+- The brush cursor outline is colour-inverted against the map, so it stays
+  visible over both free (white) and occupied (black) space
+
+**Tool shortcuts**
+
+- `Shift`+`1`…`9` quick-select tools, in toolbar order: Pen, Eraser, Restore,
+  Select, Point, Rect, Polygon, No-Go, Waypoint (the binding is shown in each
+  tool button's tooltip).
 
 **History**
 
@@ -120,6 +130,10 @@ These round-trip through `_element.json` so re-exporting never loses them.
 
 - Switch to **Select** tool, then click an element on the map
 - Or click an item in the sidebar
+- Yellow square handles appear on the selected element — drag one to move that
+  vertex (point/waypoint = its position). The status bar at the bottom shows the
+  element id and every node's world coordinates as you edit; the move is one
+  undo step.
 - Double-click a sidebar item to rename the label (Enter commits, Esc cancels)
 - `Delete` / `Backspace` — remove the selected element
 - `×` in the sidebar — remove that element
@@ -137,9 +151,11 @@ to silence it.
 
 ## Export
 
-Click **Export**. The browser asks where to save. The editor creates a
-subfolder named `<prefix>_YYYYMMDD_HHMM/` inside the chosen directory and
-writes six files into it:
+Click **Export**. The browser asks which directory to save into (e.g.
+`~/map_download`). The editor creates a subfolder named
+`<prefix>_export_<YYYYMMDD_HHMMSS>/` inside that chosen directory and writes
+six files into it. The `<prefix>` defaults to the **imported folder's name**
+(editable in the toolbar prefix box).
 
 | File | Content |
 |---|---|
@@ -262,8 +278,9 @@ own save format; the robot consumes `world.toml`.
   five separate downloads.
 - **Restore tool** requires `*_og.pgm` to revert to a pristine baseline.
   Without it, Restore reverts only to the as-loaded state of the editable PGM.
-- **Vertex editing** after a polygon is committed is not supported — delete
-  and redraw.
+- **Vertex editing** moves existing vertices (Select tool, drag a handle) but
+  doesn't add or delete vertices on a committed shape — delete and redraw to
+  change the vertex count.
 - Not profiled above ~5000 px on a side.
 
 ## Self-check

@@ -3,7 +3,7 @@
 'use strict';
 
 import { state, WAYPOINT_ARROW_PX } from './state.js';
-import { $, canvas, ctx, off, offCtx, worldToPx, screenToPx } from './dom.js';
+import { $, canvas, ctx, off, offCtx, offOrig, offOrigCtx, worldToPx, screenToPx } from './dom.js';
 import { kindOf, isVisible } from './elements.js';
 import { cursorPx } from './input.js';
 
@@ -17,6 +17,19 @@ export function renderPixels() {
   offCtx.putImageData(id, 0, 0);
 }
 
+// Render the pristine _og.pgm into its own buffer once per load — it never
+// mutates afterwards, so this isn't redrawn on every frame.
+export function renderOriginal() {
+  if (!state.original) return;
+  offOrig.width = state.w; offOrig.height = state.h;
+  const id = offOrigCtx.createImageData(state.w, state.h);
+  for (let p = 0, j = 0; p < state.original.length; p++, j += 4) {
+    const g = state.original[p];
+    id.data[j] = g; id.data[j+1] = g; id.data[j+2] = g; id.data[j+3] = 255;
+  }
+  offOrigCtx.putImageData(id, 0, 0);
+}
+
 export function draw() {
   const W = canvas.width = canvas.clientWidth;
   const H = canvas.height = canvas.clientHeight;
@@ -28,6 +41,12 @@ export function draw() {
   ctx.scale(state.view.s, state.view.s);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(off, 0, 0);
+  if (state.showOriginalOverlay && state.original) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(offOrig, 0, 0);
+    ctx.restore();
+  }
   drawGrid();
   drawOrigin();
   drawElements();
@@ -147,16 +166,40 @@ function drawElement(e, selected, preview = false) {
     const tag = state.showIds ? `#${e.id} ${e.label}` : e.label;
     ctx.fillText(tag, pts[0].px + 5 / state.view.s, pts[0].py - 5 / state.view.s);
   }
+  // Draggable node handles — drawn when this element is selected under the
+  // Select tool, so the user can see and grab each vertex to move it.
+  if (!preview && selected && state.tool === 'select') {
+    const hs = 4 / state.view.s;
+    ctx.lineWidth = 1.5 / state.view.s;
+    ctx.fillStyle = '#ffeb3b';
+    ctx.strokeStyle = '#000';
+    for (const p of pts) {
+      ctx.fillRect(p.px - hs, p.py - hs, hs * 2, hs * 2);
+      ctx.strokeRect(p.px - hs, p.py - hs, hs * 2, hs * 2);
+    }
+  }
 }
 
 function drawCursor() {
   if (!cursorPx || !['pen','eraser','restore'].includes(state.tool)) return;
-  ctx.strokeStyle = state.tool === 'pen' ? '#000' : state.tool === 'eraser' ? '#fff' : '#0f0';
+  const r = Math.max(brushRadius(), 0.5);
+  // 'difference' with white inverts whatever's underneath, so the brush outline
+  // stays visible over both the white free-space and the black occupied pixels
+  // (a plain white ring vanished against the white map).
+  ctx.save();
+  ctx.globalCompositeOperation = 'difference';
+  ctx.strokeStyle = '#fff';
   ctx.lineWidth = 1 / state.view.s;
-  const r = brushRadius();
   ctx.beginPath();
-  ctx.arc(cursorPx.px, cursorPx.py, Math.max(r, 0.5), 0, Math.PI * 2);
+  ctx.arc(cursorPx.px, cursorPx.py, r, 0, Math.PI * 2);
   ctx.stroke();
+  // small center crosshair for precise placement
+  const ch = Math.max(r * 0.6, 2 / state.view.s);
+  ctx.beginPath();
+  ctx.moveTo(cursorPx.px - ch, cursorPx.py); ctx.lineTo(cursorPx.px + ch, cursorPx.py);
+  ctx.moveTo(cursorPx.px, cursorPx.py - ch); ctx.lineTo(cursorPx.px, cursorPx.py + ch);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawScaleBar() {

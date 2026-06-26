@@ -10,6 +10,13 @@ export const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', n
 // Default heading-arrow length on screen (px); world direction, y-flipped to canvas.
 export const WAYPOINT_ARROW_PX = 26;
 
+// Tool quick-select keybinds. TOOL_ORDER mirrors the toolbar button order so
+// Shift+1 = first tool, Shift+2 = second, … TOOL_SHORTCUT_CODES uses KeyboardEvent
+// .code (layout-independent) so Shift+1 works regardless of what "!" maps to.
+export const TOOL_ORDER = ['pen', 'eraser', 'restore', 'select', 'point', 'rect', 'polygon', 'nogo', 'waypoint'];
+export const TOOL_SHORTCUT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+export const TOOL_SHORTCUT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
+
 // Inspector combo-box suggestions. The name/category inputs stay FREE TEXT (GPSR
 // names arbitrary arena places), but these surface the load-bearing challenge-
 // contract names (docs/MAP_LOCATIONS.md) so they're picked, not mistyped.
@@ -46,6 +53,8 @@ export const state = {
   hiddenLabels: new Set(),
   hiddenKinds: new Set(),
   showIds: true,
+  // Overlay the pristine _og.pgm at 60% opacity (Khemin's request) to see edits.
+  showOriginalOverlay: false,
   // monotonic element-id counter (was a module-level `let` in the monolith).
   nextId: 1,
 };

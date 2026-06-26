@@ -4,7 +4,7 @@
 // DOM is already parsed when it runs.
 'use strict';
 
-import { state } from './state.js';
+import { state, TOOL_ORDER, TOOL_SHORTCUT_KEYS } from './state.js';
 import { $ } from './dom.js';
 import { draw } from './render.js';
 import { loadFolder, exportAll } from './io.js';
@@ -40,9 +40,15 @@ $('#clear-elems').addEventListener('click', () => {
   for (const e of [...state.elements]) deleteElement(e.id);
 });
 $('#toggle-ids').addEventListener('change', (ev) => { state.showIds = ev.target.checked; draw(); });
+$('#toggle-orig').addEventListener('change', (ev) => { state.showOriginalOverlay = ev.target.checked; draw(); });
 
 document.querySelectorAll('button[data-tool]').forEach(b => {
   b.addEventListener('click', () => setTool(b.dataset.tool));
+  // Append the Shift+key hint to each tool's tooltip.
+  const i = TOOL_ORDER.indexOf(b.dataset.tool);
+  if (i >= 0 && i < TOOL_SHORTCUT_KEYS.length) {
+    b.title = `${b.title} (Shift+${TOOL_SHORTCUT_KEYS[i]})`;
+  }
 });
 
 window.addEventListener('resize', () => draw());
