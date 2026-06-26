@@ -203,6 +203,7 @@ canvas.addEventListener('mousemove', (ev) => {
   if (nodeDrag) {
     const el = state.elements.find(e => e.id === nodeDrag.id);
     if (el) { el.coords[nodeDrag.index] = [w.wx, w.wy]; status(selReadout(el, nodeDrag.index)); }
+    canvas.style.cursor = 'grabbing';
     draw();
     return;
   }
@@ -216,6 +217,7 @@ canvas.addEventListener('mousemove', (ev) => {
       el.coords = bodyDrag.before.map(([cx, cy]) => [cx + dx, cy + dy]);
       status(selReadout(el, -1));
     }
+    canvas.style.cursor = 'grabbing';
     draw();
     return;
   }
@@ -225,6 +227,13 @@ canvas.addEventListener('mousemove', (ev) => {
   const selEl = state.tool === 'select' && state.selected && state.elements.find(e => e.id === state.selected);
   if (selEl) status(selReadout(selEl, nodeAt(selEl, p)));
   else status(`world (${w.wx.toFixed(3)}, ${w.wy.toFixed(3)}) m   px (${Math.floor(p.px)}, ${Math.floor(p.py)})   tool: ${state.tool}`);
+
+  // Cursor affordance hint (Select tool): grab over a node handle of the selected
+  // element, move over any element body, plain arrow otherwise.
+  if (state.tool === 'select') {
+    canvas.style.cursor = (selEl && nodeAt(selEl, p) >= 0) ? 'grab'
+      : hitTest(w.wx, w.wy) ? 'move' : 'default';
+  }
 
   if (painting) {
     strokeTo(p.px, p.py);
