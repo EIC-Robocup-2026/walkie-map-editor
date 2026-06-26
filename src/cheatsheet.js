@@ -12,6 +12,7 @@ const MOUSE_HINTS = [
   ['Polygon / No-Go', 'click vertices, click near start to close'],
   ['Right-click', 'finish polygon'],
   ['Select + drag a node handle', 'move that vertex'],
+  ['Select + drag the body', 'move the whole element'],
   ['Double-click a list item', 'rename its label'],
   ['Drop a map folder on the canvas', 'load it'],
 ];

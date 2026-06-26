@@ -148,9 +148,10 @@ These round-trip through `_element.json` so re-exporting never loses them.
 - Switch to **Select** tool, then click an element on the map
 - Or click an item in the sidebar
 - Yellow square handles appear on the selected element — drag one to move that
-  vertex (point/waypoint = its position). The status bar at the bottom shows the
-  element id and every node's world coordinates as you edit; the move is one
-  undo step.
+  vertex (point/waypoint = its position). **Drag the element's body** (its line or
+  interior) to move the whole shape at once. The status bar at the bottom shows the
+  element id and every node's world coordinates as you edit; each move is one undo
+  step.
 - Double-click a sidebar item to rename the label (Enter commits, Esc cancels)
 - `Delete` / `Backspace` — remove the selected element
 - `×` in the sidebar — remove that element

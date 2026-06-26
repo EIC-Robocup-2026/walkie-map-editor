@@ -19,6 +19,9 @@ let painting = false;
 // Active vertex drag: { id, index, before } where `before` is a deep copy of the
 // element's coords at grab time, so the whole move commits as one undo step.
 let nodeDrag = null;
+// Active body drag: translate the whole element (point/line/area). `before` is the
+// coords at grab time; `moved` gates committing an undo step (vs. a plain click).
+let bodyDrag = null;
 
 // Index of the selected element's vertex under cursor (screen-space px), or -1.
 function nodeAt(el, p) {
@@ -38,7 +41,7 @@ function selReadout(el, active) {
   const pts = el.coords
     .map((c, i) => `${i === active ? '●' : '○'}${i}:(${(+c[0]).toFixed(2)}, ${(+c[1]).toFixed(2)})`)
     .join('  ');
-  return `selected #${el.id} ${el.label} [${kindOf(el)}] — drag a yellow handle to move · ${pts}`;
+  return `selected #${el.id} ${el.label} [${kindOf(el)}] — drag a handle to move a vertex, or the body to move the whole shape · ${pts}`;
 }
 
 function paintBrush(px, py) {
@@ -141,6 +144,12 @@ canvas.addEventListener('mousedown', (ev) => {
     rebuildElemList();
     rebuildInspector();
     draw();
+    // Pressing on an element's body arms a whole-element move; if the mouse then
+    // moves, we translate every vertex. A press with no move is just a select.
+    if (id) {
+      const el = state.elements.find(e => e.id === id);
+      bodyDrag = { id, startWx: w.wx, startWy: w.wy, before: el.coords.map(c => [...c]), moved: false };
+    }
     return;
   }
   if (['pen', 'eraser', 'restore'].includes(state.tool)) {
@@ -198,6 +207,19 @@ canvas.addEventListener('mousemove', (ev) => {
     return;
   }
 
+  // Dragging the body: translate the whole element by the cursor delta.
+  if (bodyDrag) {
+    const el = state.elements.find(e => e.id === bodyDrag.id);
+    if (el) {
+      const dx = w.wx - bodyDrag.startWx, dy = w.wy - bodyDrag.startWy;
+      if (Math.hypot(dx, dy) > state.meta.resolution * 0.5) bodyDrag.moved = true;
+      el.coords = bodyDrag.before.map(([cx, cy]) => [cx + dx, cy + dy]);
+      status(selReadout(el, -1));
+    }
+    draw();
+    return;
+  }
+
   // Readout: when a shape is selected for editing, show its node coords (bottom
   // text box); otherwise the usual cursor world/pixel position.
   const selEl = state.tool === 'select' && state.selected && state.elements.find(e => e.id === state.selected);
@@ -230,6 +252,22 @@ canvas.addEventListener('mouseup', (ev) => {
       rebuildInspector();                                  // refresh waypoint pos display
     }
     nodeDrag = null;
+    draw();
+    return;
+  }
+  if (bodyDrag) {
+    const el = state.elements.find(e => e.id === bodyDrag.id);
+    if (el) {
+      if (bodyDrag.moved) {
+        const finalCoords = el.coords.map(c => [...c]);
+        el.coords = bodyDrag.before;                       // restore for a clean undo diff
+        updateElementFields(el.id, { coords: finalCoords }); // one undoable elem-mod
+        rebuildInspector();
+      } else {
+        el.coords = bodyDrag.before;                       // sub-threshold jitter: revert, it was a click
+      }
+    }
+    bodyDrag = null;
     draw();
     return;
   }
