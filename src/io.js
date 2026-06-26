@@ -9,6 +9,7 @@ import {
   buildWorldTomlFrom, worldIssuesFrom, normalizeVocab,
 } from './pure.js';
 import { renderPixels, renderOriginal } from './render.js';
+import { makeZip } from './zip.js';
 import {
   rebuildLabelSelect, rebuildElemList, rebuildVisibility, rebuildInspector,
   rebuildVocabUI, updateInfo, status, fitView,
@@ -180,15 +181,14 @@ export async function exportAll() {
       console.warn('folder picker failed, falling back to downloads', e);
     }
   }
-  // Fallback: individual downloads, name-prefixed so user can group manually
-  for (const [name, bytes] of files) {
-    const type = name.endsWith('.json') ? 'application/json'
-      : name.endsWith('.yaml') ? 'text/yaml'
-      : name.endsWith('.toml') ? 'text/plain' : 'application/octet-stream';
-    download(`${folderName}__${name}`, bytes, type);
-  }
+  // Fallback (Firefox / Safari — no showDirectoryPicker, so the OS folder can't
+  // be chosen from JS): bundle everything into ONE .zip that unzips into the
+  // <prefix>_export_<datetime>/ folder. Enable Firefox's "Always ask you where
+  // to save files" to get a Save-As location prompt for this single download.
+  const zip = makeZip(files.map(([name, bytes]) => [`${folderName}/${name}`, bytes]));
+  download(`${folderName}.zip`, zip, 'application/zip');
   state.dirty = false;
-  status(`exported ${files.length} files (prefixed ${folderName}__)`);
+  status(`browser can't pick a folder — saved all ${files.length} files as ${folderName}.zip (unzip to get the folder)`);
 }
 
 function buildKeepout() {

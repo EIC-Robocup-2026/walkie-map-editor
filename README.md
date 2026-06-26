@@ -177,9 +177,13 @@ confirm through.
 Re-import the exported subfolder to round-trip — element geometry, waypoint
 fields, and arena vocab are all preserved.
 
-**Browsers without `showDirectoryPicker`** (Firefox, Safari) fall back to
-individual downloads, each prefixed with the folder name so you can group
-them manually.
+**Browsers without `showDirectoryPicker`** (Firefox, Safari) can't open an
+OS folder picker from JavaScript, so they instead download a single
+`<prefix>_export_<YYYYMMDD_HHMMSS>.zip` that unzips into the same folder with
+all six files inside. To choose *where* that zip lands, enable Firefox's
+**Settings → General → Downloads → "Always ask you where to save files"** —
+you'll get a Save-As dialog for the one download. For direct write-into-a-
+folder, use Chrome / Edge / Brave (over `localhost` or HTTPS).
 
 ## `world.toml` — walkie-agent-v2 map
 
@@ -274,8 +278,8 @@ own save format; the robot consumes `world.toml`.
 
 - **Safari** has weak `webkitdirectory` support. Fallback: shift/cmd-click to
   pick the files individually in the folder dialog.
-- **Firefox / Safari** lack `showDirectoryPicker`, so export falls back to
-  five separate downloads.
+- **Firefox / Safari** lack `showDirectoryPicker`, so export falls back to a
+  single `.zip` download (they can't pick a destination folder from JS).
 - **Restore tool** requires `*_og.pgm` to revert to a pristine baseline.
   Without it, Restore reverts only to the as-loaded state of the editable PGM.
 - **Vertex editing** moves existing vertices (Select tool, drag a handle) but
