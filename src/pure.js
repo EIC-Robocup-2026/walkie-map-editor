@@ -347,7 +347,8 @@ export function parseOctomap(buf) {
     const readBt = (p, cx, cy, cz, size) => {
       if (p + 2 > bytes.length) return p;
       const b1 = bytes[p], b2 = bytes[p + 1]; p += 2;
-      const half = size * 0.5;
+      const half = size * 0.5;          // child node edge (passed as next size)
+      const q = half * 0.5;             // child-centre offset from parent centre (= size/4)
       const recurse = [];
       for (let i = 0; i < 8; i++) {
         const b = i < 4 ? b1 : b2;
@@ -356,9 +357,9 @@ export function parseOctomap(buf) {
         const inner  = (b >> (sh + 1)) & 1;
         if (!exists && !inner) continue;
         // bit0=x, bit1=y, bit2=z
-        const dx = (i & 1) ? half : -half;
-        const dy = (i & 2) ? half : -half;
-        const dz = (i & 4) ? half : -half;
+        const dx = (i & 1) ? q : -q;
+        const dy = (i & 2) ? q : -q;
+        const dz = (i & 4) ? q : -q;
         if (inner) { recurse.push(cx + dx, cy + dy, cz + dz); }
         else        { xArr.push(cx + dx); yArr.push(cy + dy); zArr.push(cz + dz); }
       }
@@ -375,14 +376,15 @@ export function parseOctomap(buf) {
       const logOdds   = view.getFloat32(p, true); // little-endian (x86)
       const childMask = bytes[p + 4];
       p += 5;
-      const half = size * 0.5;
+      const half = size * 0.5;          // child node edge (passed as next size)
+      const q = half * 0.5;             // child-centre offset from parent centre (= size/4)
       let hasChildren = false;
       for (let i = 0; i < 8; i++) {
         if (!(childMask & (1 << i))) continue;
         hasChildren = true;
-        const dx = (i & 1) ? half : -half;
-        const dy = (i & 2) ? half : -half;
-        const dz = (i & 4) ? half : -half;
+        const dx = (i & 1) ? q : -q;
+        const dy = (i & 2) ? q : -q;
+        const dz = (i & 4) ? q : -q;
         p = readOt(p, cx + dx, cy + dy, cz + dz, half);
       }
       // Occupied leaf: no children and positive log-odds (prob > 0.5)
