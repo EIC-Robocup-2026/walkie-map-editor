@@ -198,15 +198,29 @@ function drawElement(e, selected, preview = false) {
     : e.role === 'location' ? '#34d399'
     : e.role === 'door' ? '#f472b6'
     : '#a78bfa';
-  // Drawn shapes get a per-label colour within their type's family; legacy/untyped
-  // shapes stay cyan.
-  const labelCol = e.semType ? colorForLabel(e.semType, e.label) : '#22d3ee';
-  const col = selected ? '#ffeb3b' : hovered ? '#ffffff' : nogoFill ? '#ff4444' : wp ? wpCol : labelCol;
+  // Per-label colour within the type family; typed waypoints (area/object) use it
+  // too. Plain waypoints/doors keep their role colour; legacy/untyped shapes cyan.
+  const baseCol = e.semType ? colorForLabel(e.semType, e.label) : wp ? wpCol : '#22d3ee';
+  const col = selected ? '#ffeb3b' : hovered ? '#ffffff' : nogoFill ? '#ff4444' : baseCol;
+  const fillCol = nogoFill ? 'rgba(255,68,68,0.25)' : (e.semType ? fillForLabel(e.semType, e.label) : 'rgba(34,211,238,0.15)');
   ctx.lineWidth = (selected ? 2 : hovered ? 2.5 : 1.5) / state.view.s;
   ctx.strokeStyle = col;
-  ctx.fillStyle = nogoFill ? 'rgba(255,68,68,0.25)' : (e.semType ? fillForLabel(e.semType, e.label) : 'rgba(34,211,238,0.15)');
+  ctx.fillStyle = fillCol;
   const pts = e.coords.map(([wx, wy]) => worldToPx(wx, wy));
   if (wp) {
+    // Unified waypoint: draw its boundary/footprint polygon first, then the pose arrow.
+    if (Array.isArray(e.polygon) && e.polygon.length >= 2) {
+      const poly = e.polygon.map(([wx, wy]) => worldToPx(wx, wy));
+      ctx.save();
+      ctx.fillStyle = fillCol; ctx.strokeStyle = col;
+      ctx.lineWidth = (selected ? 2 : 1.2) / state.view.s;
+      if (selected) ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(poly[0].px, poly[0].py);
+      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].px, poly[i].py);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
     const p = pts[0];
     const L = WAYPOINT_ARROW_PX / state.view.s, r = 4 / state.view.s;
     const ex = p.px + L * Math.cos(e.heading || 0);

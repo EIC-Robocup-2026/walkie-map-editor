@@ -240,6 +240,20 @@ export function rebuildDrawSettings() {
 
     root.appendChild(sec);
   }
+
+  // Forced-waypoint behaviour: areas always create a room waypoint at the shape's
+  // centre; objects do so only when this is ticked (else they stay a plain footprint).
+  const wpRow = document.createElement('label');
+  wpRow.className = 'draw-wp-row';
+  wpRow.title = 'Areas always get a room waypoint at the shape centre. Tick to also place a location waypoint when drawing objects.';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = !!state.objectWaypoint;
+  cb.onchange = () => { state.objectWaypoint = cb.checked; };
+  wpRow.appendChild(cb);
+  const txt = document.createElement('span');
+  txt.textContent = ' Place a waypoint for objects (areas always do)';
+  wpRow.appendChild(txt);
+  root.appendChild(wpRow);
 }
 
 export function saveLabels() {

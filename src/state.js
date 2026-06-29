@@ -105,6 +105,9 @@ export const state = {
   labelSets: { area: DEFAULT_LABEL_SETS.area.slice(), object: DEFAULT_LABEL_SETS.object.slice() },
   activeType: 'area',
   activeLabel: { area: DEFAULT_LABEL_SETS.area[0], object: DEFAULT_LABEL_SETS.object[0] },
+  // Whether drawing an OBJECT also creates a location waypoint at the shape's
+  // centre (areas always do — the waypoint is forced for area, optional for object).
+  objectWaypoint: true,
   // Non-spatial arena vocabulary for walkie-agent-v2's GPSR world.toml.
   vocab: { object_categories: {}, names: [], gestures: {} },
   selected: null,

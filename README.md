@@ -66,6 +66,22 @@ distinguishable while still reading as their type at a glance. A drawn shape
 carries its label colour on the canvas and as a swatch in the element list; the
 chip dots in the Draw panel preview each label's colour. No-go zones are untyped.
 
+**Drawing an area or object makes one unified `world.toml` place.** When you draw a
+closed shape (rect or polygon) with a type:
+
+- the **drawn outline becomes the place's `polygon`** (room boundary / furniture
+  footprint), and
+- a **waypoint pose is auto-placed at the shape's centre**, named from the label
+  (auto-snake_cased, de-duplicated: `table`, `table_2`, …).
+
+`area` → a `[rooms]` entry; `object` → a `[locations]` entry. An object drawn
+inside an area auto-links its `room` to that area (point-in-polygon). The waypoint
+is **forced for areas**; for objects it's **optional** — untick *"Place a waypoint
+for objects"* in the Draw panel to draw a plain footprint instead. The new place is
+selected on creation so you can refine its name/room/heading in the **Waypoint**
+inspector; click anywhere inside its outline to re-select it. Re-draw to change the
+boundary.
+
 **Shape** — store coordinates in **world meters**, resolution-independent.
 
 | Tool | Click behaviour |

@@ -225,3 +225,5 @@ body.sidebar-collapsed #status { right: 0; }
 
 /* Element-list type swatch */
 .type-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.draw-wp-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb; padding: 2px; cursor: pointer; }
+.draw-wp-row input { margin: 0; }

@@ -2,7 +2,8 @@
 // the canvas/window event listeners. Tool selection lives here too.
 'use strict';
 
-import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES } from './state.js';
+import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES, roleForType } from './state.js';
+import { canon, polygonCentroid, pointInPoly } from './pure.js';
 import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
 import { draw, brushRadius } from './render.js';
 import { addElement, deleteElement, hitTest, updateElementFields, kindOf, isVisible } from './elements.js';
@@ -110,6 +111,64 @@ function strokeTo(px, py) {
 
 function isPanTrigger(ev) {
   return ev.button === 1 || (ev.button === 0 && (ev.altKey || ev.ctrlKey || ev.metaKey));
+}
+
+// ───── Unified shape + waypoint (area always, object optional) ───────
+
+// Make `base` unique among existing waypoint names of the same role, so drawing
+// two "table" objects yields table / table_2 instead of a duplicate-key export error.
+function uniqueWaypointName(base, role) {
+  if (!base) return base;
+  const taken = new Set(state.elements
+    .filter(e => e.type === 'waypoint' && e.role === role && e.name && e.id !== undefined)
+    .map(e => canon(e.name)));
+  if (!taken.has(base)) return base;
+  let i = 2;
+  while (taken.has(`${base}_${i}`)) i++;
+  return `${base}_${i}`;
+}
+// The room whose boundary polygon contains `pt`, so a drawn object auto-links to
+// the room it sits in. '' if none.
+function roomContaining([x, y]) {
+  for (const e of state.elements) {
+    if (e.type === 'waypoint' && e.role === 'room' && Array.isArray(e.polygon)
+        && e.polygon.length >= 3 && pointInPoly(x, y, e.polygon)) return canon(e.name);
+  }
+  return '';
+}
+
+// Turn a finished drawing into an element. A closed, typed shape becomes a UNIFIED
+// waypoint (pose = polygon centroid, polygon = the drawn boundary, name = the label):
+// forced for area (→ room), optional for object (→ location). Everything else stays
+// a plain shape.
+function buildDrawnElement({ type, coords, closed, label, semType }) {
+  const wantWp = semType === 'area' || (semType === 'object' && state.objectWaypoint);
+  if (wantWp && closed && coords.length >= 3) {
+    const role = roleForType(semType);
+    const name = uniqueWaypointName(canon(label), role);
+    const centre = polygonCentroid(coords);
+    return {
+      type: 'waypoint', label: name || label, semType,
+      coords: [centre], closed: false, asNogo: false,
+      ...defaultWaypointFields({
+        role, name, polygon: coords.map(p => [...p]), present: true,
+        room: role === 'location' ? roomContaining(centre) : '',
+      }),
+    };
+  }
+  return { type, label, semType, coords, closed, asNogo: false };
+}
+
+// Add a freshly drawn element; if it's a waypoint, select it so the inspector
+// opens for naming/refining (mirrors the Waypoint tool).
+function commitDrawnElement(el) {
+  addElement(el);
+  if (el.type === 'waypoint') {
+    state.selected = el.id;
+    rebuildElemList();
+    rebuildInspector();
+    draw();
+  }
 }
 
 canvas.addEventListener('mousedown', (ev) => {
@@ -326,10 +385,10 @@ canvas.addEventListener('mouseup', (ev) => {
     state.currentStroke = null;
   }
   if (state.tool === 'rect' && state.drawing) {
-    const el = { type: 'rect', label: state.drawing.label, semType: state.drawing.semType, asNogo: false,
-      coords: state.drawing.coords.map(c => [...c]), closed: true };  // already 4 bbox corners
+    const el = buildDrawnElement({ type: 'rect', coords: state.drawing.coords.map(c => [...c]),
+      closed: true, label: state.drawing.label, semType: state.drawing.semType });  // already 4 bbox corners
     state.drawing = null;
-    addElement(el);
+    commitDrawnElement(el);
   }
   if ((state.tool === 'waypoint' || state.tool === 'door') && state.drawing && state.drawing.type === 'waypoint') {
     const wp = state.drawing;
@@ -406,10 +465,10 @@ function finishPoly(closed) {
   if (!state.drawing) return;
   const minPts = closed ? 3 : 2;
   if (state.drawing.coords.length < minPts) { state.drawing = null; draw(); return; }
-  const el = { type: state.drawing.type, label: state.drawing.label, semType: state.drawing.semType, asNogo: false,
-    coords: state.drawing.coords, closed };
+  const el = buildDrawnElement({ type: state.drawing.type, coords: state.drawing.coords,
+    closed, label: state.drawing.label, semType: state.drawing.semType });
   state.drawing = null;
-  addElement(el);
+  commitDrawnElement(el);
 }
 
 export function setTool(t) {
