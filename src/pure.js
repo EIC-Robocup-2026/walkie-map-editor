@@ -296,3 +296,110 @@ export function distToSeg(x, y, a, b) {
   const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
   return Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
 }
+
+// ───── OctoMap parser (.ot / .bt) ───────────────────────────────────
+
+/**
+ * Parse an OctoMap binary file (.ot full OcTree or .bt binary OcTree).
+ * Returns { resolution, xs, ys, zs } — Float32Arrays of occupied voxel centres.
+ *
+ * Both formats share an ASCII header ending with "data\n".
+ * After the header the binary encoding differs:
+ *
+ *  .bt (binary OcTree) — compact, 2 bytes per inner node:
+ *    Byte covers 4 children × 2 bits each: bit(shift+0)=exists, bit(shift+1)=is_inner.
+ *    Children 0-3 in byte1, children 4-7 in byte2.  Occupied leaf: exists=1, inner=0.
+ *    Inner node: exists=1, inner=1 → recurse.  DFS order, inner nodes recursed
+ *    in order 0→3 (byte1) then 4→7 (byte2).
+ *
+ *  .ot (full OcTree) — each node: float32(log_odds) + uint8(child_bitmap) + children...
+ *    Pre-order DFS.  Leaf node ↔ child_bitmap==0.  Occupied leaf ↔ log_odds > 0.
+ *
+ * OctoMap child index bit convention (from computeChildKey):
+ *   bit 0 → +x, bit 1 → +y, bit 2 → +z.
+ * Root centre = (0, 0, 0), root edge = resolution × 2^16.
+ */
+export function parseOctomap(buf) {
+  const bytes = new Uint8Array(buf);
+  const dec = new TextDecoder('ascii');
+  let pos = 0;
+
+  // --- ASCII header -------------------------------------------------
+  let resolution = 0, isBt = false;
+  while (pos < bytes.length) {
+    const start = pos;
+    while (pos < bytes.length && bytes[pos] !== 0x0a) pos++;
+    const line = dec.decode(bytes.subarray(start, pos)).replace(/\r$/, '');
+    pos++; // skip \n
+    if (line.includes('binary')) isBt = true;
+    if (line.startsWith('res ')) resolution = parseFloat(line.slice(4));
+    if (line === 'data') break;
+  }
+  if (!resolution) throw new Error('OctoMap header missing resolution');
+
+  // Root covers resolution × 2^16 metres, centred at world origin.
+  const ROOT_SIZE = resolution * 65536;
+
+  const xArr = [], yArr = [], zArr = [];
+
+  if (isBt) {
+    // .bt: 2 bytes per node = 8 children × 2 bits (exists | is_inner)
+    const readBt = (p, cx, cy, cz, size) => {
+      if (p + 2 > bytes.length) return p;
+      const b1 = bytes[p], b2 = bytes[p + 1]; p += 2;
+      const half = size * 0.5;          // child node edge (passed as next size)
+      const q = half * 0.5;             // child-centre offset from parent centre (= size/4)
+      const recurse = [];
+      for (let i = 0; i < 8; i++) {
+        const b = i < 4 ? b1 : b2;
+        const sh = (i & 3) << 1;          // (i%4)*2
+        const exists = (b >> sh) & 1;
+        const inner  = (b >> (sh + 1)) & 1;
+        if (!exists && !inner) continue;
+        // bit0=x, bit1=y, bit2=z
+        const dx = (i & 1) ? q : -q;
+        const dy = (i & 2) ? q : -q;
+        const dz = (i & 4) ? q : -q;
+        if (inner) { recurse.push(cx + dx, cy + dy, cz + dz); }
+        else        { xArr.push(cx + dx); yArr.push(cy + dy); zArr.push(cz + dz); }
+      }
+      for (let r = 0; r < recurse.length; r += 3)
+        p = readBt(p, recurse[r], recurse[r+1], recurse[r+2], half);
+      return p;
+    };
+    readBt(pos, 0, 0, 0, ROOT_SIZE);
+  } else {
+    // .ot: float32(log_odds) + uint8(child_bitmap) then children recursively
+    const view = new DataView(buf);
+    const readOt = (p, cx, cy, cz, size) => {
+      if (p + 5 > bytes.length) return p;
+      const logOdds   = view.getFloat32(p, true); // little-endian (x86)
+      const childMask = bytes[p + 4];
+      p += 5;
+      const half = size * 0.5;          // child node edge (passed as next size)
+      const q = half * 0.5;             // child-centre offset from parent centre (= size/4)
+      let hasChildren = false;
+      for (let i = 0; i < 8; i++) {
+        if (!(childMask & (1 << i))) continue;
+        hasChildren = true;
+        const dx = (i & 1) ? q : -q;
+        const dy = (i & 2) ? q : -q;
+        const dz = (i & 4) ? q : -q;
+        p = readOt(p, cx + dx, cy + dy, cz + dz, half);
+      }
+      // Occupied leaf: no children and positive log-odds (prob > 0.5)
+      if (!hasChildren && logOdds > 0) {
+        xArr.push(cx); yArr.push(cy); zArr.push(cz);
+      }
+      return p;
+    };
+    readOt(pos, 0, 0, 0, ROOT_SIZE);
+  }
+
+  return {
+    resolution,
+    xs: new Float32Array(xArr),
+    ys: new Float32Array(yArr),
+    zs: new Float32Array(zArr),
+  };
+}
