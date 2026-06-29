@@ -14,6 +14,7 @@ import { clearAllElements } from './elements.js';
 import {
   loadLabels, rebuildLabelSelect, rebuildVisibility, rebuildInspector,
   rebuildVocabUI, rebuildElemList, fitView, status, toggleSidebar, restoreSidebar,
+  setActiveType, setActiveLabel, addLabelToType, currentType,
 } from './ui.js';
 import { openPalette } from './palette.js';
 import { openCheatsheet } from './cheatsheet.js';
@@ -24,14 +25,14 @@ import { runSelfCheck } from './tests.js';
 $('#folder-input').addEventListener('change', (ev) => loadFolder(ev.target.files));
 $('#export-btn').addEventListener('click', exportAll);
 $('#brush').addEventListener('input', (ev) => { state.brush = +ev.target.value; $('#brush-val').textContent = ev.target.value; draw(); });
+// Type toggle (Area / Object) — sets the active draw type.
+document.querySelectorAll('#type-toggle .type-btn').forEach(b =>
+  b.addEventListener('click', () => setActiveType(b.dataset.type)));
+// Label <select> picks the active label within the active type.
+$('#label-select').addEventListener('change', (ev) => setActiveLabel(ev.target.value));
 $('#add-label').addEventListener('click', () => {
-  const v = prompt('new label:');
-  if (!v) return;
-  const t = v.trim();
-  if (!t || state.labels.includes(t)) return;
-  state.labels.push(t);
-  rebuildLabelSelect();
-  $('#label-select').value = t;
+  const v = prompt(`new ${currentType()} label:`);
+  if (v) addLabelToType(currentType(), v);
 });
 $('#undo').addEventListener('click', undo);
 $('#redo').addEventListener('click', redoFn);

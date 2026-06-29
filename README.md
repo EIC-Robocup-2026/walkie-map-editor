@@ -49,6 +49,20 @@ Click **Load folder** and pick a folder containing:
 - Fast mouse moves are interpolated, so a straight drag draws a continuous
   line (no gaps).
 
+**Draw type & label** — before drawing a shape, pick a **type** and a **label**:
+
+- **Type** is `area` or `object`, shown as the toolbar toggle and colour-coded
+  (area = cyan, object = amber). `area` auto-maps to a `world.toml` **room**,
+  `object` to a **location**.
+- **Label** comes from that type's managed list (the toolbar dropdown). Manage the
+  lists in the sidebar **Draw** panel — click a chip to make it active, `×` to
+  remove, or type in the add box (`+`) to add a custom label. Defaults: area =
+  `living_room`, `kitchen_room`, `bedroom`, `laundry`; object = `table`, `shelf`,
+  `chair`, `sofa`, `tv`. Custom labels persist across sessions.
+
+A drawn shape is tagged with its type (it carries the type colour on the canvas
+and a swatch in the element list). No-go zones are untyped.
+
 **Shape** — store coordinates in **world meters**, resolution-independent.
 
 | Tool | Click behaviour |

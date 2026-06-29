@@ -2,7 +2,7 @@
 // brush cursor, and scale bar.
 'use strict';
 
-import { state, WAYPOINT_ARROW_PX, DOOR_DEFAULT_RADIUS_M } from './state.js';
+import { state, WAYPOINT_ARROW_PX, DOOR_DEFAULT_RADIUS_M, TYPE_COLORS, TYPE_FILLS } from './state.js';
 import { $, canvas, ctx, off, offCtx, offOrig, offOrigCtx, offRef, offRefCtx, worldToPx, screenToPx } from './dom.js';
 import { kindOf, isVisible } from './elements.js';
 import { cursorPx } from './input.js';
@@ -198,10 +198,12 @@ function drawElement(e, selected, preview = false) {
     : e.role === 'location' ? '#34d399'
     : e.role === 'door' ? '#f472b6'
     : '#a78bfa';
-  const col = selected ? '#ffeb3b' : hovered ? '#ffffff' : nogoFill ? '#ff4444' : wp ? wpCol : '#22d3ee';
+  // Drawn shapes carry a type colour (area/object); legacy/untyped shapes stay cyan.
+  const typeCol = TYPE_COLORS[e.semType] || '#22d3ee';
+  const col = selected ? '#ffeb3b' : hovered ? '#ffffff' : nogoFill ? '#ff4444' : wp ? wpCol : typeCol;
   ctx.lineWidth = (selected ? 2 : hovered ? 2.5 : 1.5) / state.view.s;
   ctx.strokeStyle = col;
-  ctx.fillStyle = nogoFill ? 'rgba(255,68,68,0.25)' : 'rgba(34,211,238,0.15)';
+  ctx.fillStyle = nogoFill ? 'rgba(255,68,68,0.25)' : (TYPE_FILLS[e.semType] || 'rgba(34,211,238,0.15)');
   const pts = e.coords.map(([wx, wy]) => worldToPx(wx, wy));
   if (wp) {
     const p = pts[0];

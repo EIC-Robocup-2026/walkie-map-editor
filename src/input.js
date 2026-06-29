@@ -7,7 +7,7 @@ import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
 import { draw, brushRadius } from './render.js';
 import { addElement, deleteElement, hitTest, updateElementFields, kindOf, isVisible } from './elements.js';
 import { pushUndo, undo, redoFn } from './history.js';
-import { status, rebuildElemList, rebuildInspector, currentLabel, toggleSidebar } from './ui.js';
+import { status, rebuildElemList, rebuildInspector, currentLabel, currentType, toggleSidebar } from './ui.js';
 import { defaultWaypointFields } from './io.js';
 import { openPalette, isPaletteOpen } from './palette.js';
 import { openCheatsheet, isCheatsheetOpen } from './cheatsheet.js';
@@ -175,16 +175,18 @@ canvas.addEventListener('mousedown', (ev) => {
       coords: [[w.wx, w.wy]], closed: false, asNogo: false, ...defaultWaypointFields({ role }) };
     draw();
   } else if (state.tool === 'point') {
-    addElement({ type: 'point', label: currentLabel(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
+    addElement({ type: 'point', label: currentLabel(), semType: currentType(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
   } else if (state.tool === 'rect') {
     // Store the fixed start corner; coords carries all 4 bbox corners so the
     // preview renders as a rectangle (closed poly) rather than a diagonal line.
-    state.drawing = { id: 'tmp', label: currentLabel(), type: 'rect', start: [w.wx, w.wy],
+    state.drawing = { id: 'tmp', label: currentLabel(), semType: currentType(), type: 'rect', start: [w.wx, w.wy],
       coords: [[w.wx, w.wy], [w.wx, w.wy], [w.wx, w.wy], [w.wx, w.wy]], closed: true, asNogo: false };
   } else if (state.tool === 'polygon' || state.tool === 'nogo') {
     if (!state.drawing) {
       const t = state.tool === 'nogo' ? 'nogo' : 'polygon';
-      state.drawing = { id: 'tmp', label: state.tool === 'nogo' ? 'no-go' : currentLabel(), type: t, coords: [[w.wx, w.wy]], closed: false, asNogo: false };
+      // No-go zones aren't an area/object — they carry no semType.
+      state.drawing = { id: 'tmp', label: state.tool === 'nogo' ? 'no-go' : currentLabel(),
+        semType: state.tool === 'nogo' ? undefined : currentType(), type: t, coords: [[w.wx, w.wy]], closed: false, asNogo: false };
     } else {
       const start = state.drawing.coords[0];
       const startPx = worldToPx(start[0], start[1]);
@@ -324,7 +326,7 @@ canvas.addEventListener('mouseup', (ev) => {
     state.currentStroke = null;
   }
   if (state.tool === 'rect' && state.drawing) {
-    const el = { type: 'rect', label: currentLabel(), asNogo: false,
+    const el = { type: 'rect', label: state.drawing.label, semType: state.drawing.semType, asNogo: false,
       coords: state.drawing.coords.map(c => [...c]), closed: true };  // already 4 bbox corners
     state.drawing = null;
     addElement(el);
@@ -404,7 +406,7 @@ function finishPoly(closed) {
   if (!state.drawing) return;
   const minPts = closed ? 3 : 2;
   if (state.drawing.coords.length < minPts) { state.drawing = null; draw(); return; }
-  const el = { type: state.drawing.type, label: state.drawing.label, asNogo: false,
+  const el = { type: state.drawing.type, label: state.drawing.label, semType: state.drawing.semType, asNogo: false,
     coords: state.drawing.coords, closed };
   state.drawing = null;
   addElement(el);

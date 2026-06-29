@@ -5,6 +5,23 @@
 'use strict';
 
 export const DEFAULT_LABELS = ['table', 'shelf', 'chair', 'sofa', 'tv', 'food', 'drink'];
+
+// ───── Structured draw model (type → label) ─────────────────────────
+// Every drawn shape is tagged with a semantic TYPE and a LABEL from that type's
+// managed list (instead of one free-text label). The type auto-maps to a
+// world.toml role when a waypoint is bound (area → room, object → location).
+export const LABEL_TYPES = ['area', 'object'];
+export const DEFAULT_LABEL_SETS = {
+  area: ['living_room', 'kitchen_room', 'bedroom', 'laundry'],
+  object: ['table', 'shelf', 'chair', 'sofa', 'tv'],
+};
+// Per-type colour tag. Picked to stay legible over BOTH free (white) and occupied
+// (black) map pixels; refined in the colour-overhaul feature.
+export const TYPE_COLORS = { area: '#22d3ee', object: '#f59e0b' };
+export const TYPE_FILLS = { area: 'rgba(34,211,238,0.15)', object: 'rgba(245,158,11,0.15)' };
+// area → [rooms], object → [locations] (the rulebook auto-map).
+export const roleForType = (t) => (t === 'area' ? 'room' : t === 'object' ? 'location' : '');
+
 export const FREE = 254, OCC = 0;
 export const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', nogo: 'no-go', waypoint: 'waypoint' };
 // Default heading-arrow length on screen (px); world direction, y-flipped to canvas.
@@ -44,6 +61,11 @@ export const state = {
   prefix: 'map',
   elements: [],
   labels: DEFAULT_LABELS.slice(),
+  // Structured draw selection: managed label list per type, the active type, and
+  // the remembered active label per type (so switching type restores its label).
+  labelSets: { area: DEFAULT_LABEL_SETS.area.slice(), object: DEFAULT_LABEL_SETS.object.slice() },
+  activeType: 'area',
+  activeLabel: { area: DEFAULT_LABEL_SETS.area[0], object: DEFAULT_LABEL_SETS.object[0] },
   // Non-spatial arena vocabulary for walkie-agent-v2's GPSR world.toml.
   vocab: { object_categories: {}, names: [], gestures: {} },
   selected: null,

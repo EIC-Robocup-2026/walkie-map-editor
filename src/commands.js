@@ -4,11 +4,11 @@
 // reflect current state.
 'use strict';
 
-import { state, TOOL_ORDER, TOOL_SHORTCUT_KEYS } from './state.js';
+import { state, TOOL_ORDER, TOOL_SHORTCUT_KEYS, LABEL_TYPES } from './state.js';
 import { $ } from './dom.js';
 import { setTool } from './input.js';
 import { undo, redoFn } from './history.js';
-import { fitView, toggleSidebar, rebuildElemList, rebuildInspector } from './ui.js';
+import { fitView, toggleSidebar, rebuildElemList, rebuildInspector, setActiveType, setActiveLabel } from './ui.js';
 import { exportAll } from './io.js';
 import { clearAllElements, deleteElement, kindOf } from './elements.js';
 import { draw, zoomToElement } from './render.js';
@@ -67,10 +67,12 @@ export function getCommands() {
       run: () => { state.selected = e.id; rebuildElemList(); rebuildInspector(); zoomToElement(e); } });
   }
 
-  // ── Set active label (for the next shape) ──
-  for (const l of state.labels) {
-    cmds.push({ id: 'label.' + l, category: 'Set label', title: `Label: ${l}`, keys: [],
-      run: () => { const sel = $('#label-select'); if (sel) sel.value = l; } });
+  // ── Set active type + label (for the next shape) ──
+  for (const type of LABEL_TYPES) {
+    for (const l of state.labelSets[type] || []) {
+      cmds.push({ id: `label.${type}.${l}`, category: 'Set label', title: `${type}: ${l}`, keys: [],
+        run: () => { setActiveType(type); setActiveLabel(l); } });
+    }
   }
 
   return cmds;

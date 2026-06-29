@@ -3,7 +3,7 @@
 'use strict';
 
 import {
-  state, markDirty,
+  state, markDirty, LABEL_TYPES, TYPE_COLORS,
   SUGGEST_ROOM_NAMES, SUGGEST_LOCATION_NAMES, SUGGEST_CATEGORIES,
   SUGGEST_OBJECT_CATEGORIES, SUGGEST_GESTURES, SUGGEST_DOOR_NAMES, DOOR_DEFAULT_RADIUS_M,
 } from './state.js';
@@ -31,6 +31,13 @@ export function rebuildElemList() {
 
     const main = document.createElement('span');
     main.className = 'main';
+    if (e.semType) {
+      const sw = document.createElement('span');
+      sw.className = 'type-sw';
+      sw.style.background = TYPE_COLORS[e.semType];
+      sw.title = e.semType;
+      main.appendChild(sw);
+    }
     const idTag = document.createElement('code');
     idTag.className = 'eid';
     idTag.textContent = '#' + e.id;
@@ -121,25 +128,129 @@ function fillFilter(sel, items, hiddenSet) {
   }
 }
 
-// ───── Labels ───────────────────────────────────────────────────────
+// ───── Structured draw model: type → label ──────────────────────────
 
-export function rebuildLabelSelect() {
-  const sel = $('#label-select');
-  const cur = sel.value;
-  while (sel.firstChild) sel.removeChild(sel.firstChild);
-  for (const l of state.labels) {
-    const o = document.createElement('option'); o.value = l; o.textContent = l;
-    sel.appendChild(o);
-  }
-  if (state.labels.includes(cur)) sel.value = cur;
-  saveLabels();
+export function currentType() { return state.activeType; }
+export function currentLabel() {
+  const set = state.labelSets[state.activeType] || [];
+  return state.activeLabel[state.activeType] || set[0] || 'unknown';
 }
-export function currentLabel() { return $('#label-select').value || state.labels[0] || 'unknown'; }
-export function saveLabels() { try { localStorage.setItem('walkie-labels', JSON.stringify(state.labels)); } catch {} }
+export function colorForType(t) { return TYPE_COLORS[t] || '#22d3ee'; }
+
+export function setActiveType(t) {
+  if (!state.labelSets[t]) return;
+  state.activeType = t;
+  rebuildLabelSelect();
+  draw();
+}
+export function setActiveLabel(l) {
+  state.activeLabel[state.activeType] = l;
+  rebuildLabelSelect();
+}
+export function addLabelToType(type, name) {
+  const t = (name || '').trim();
+  const set = state.labelSets[type];
+  if (!t || !set || set.includes(t)) return false;
+  set.push(t);
+  state.activeType = type;
+  state.activeLabel[type] = t;
+  rebuildLabelSelect();
+  return true;
+}
+export function removeLabelFromType(type, name) {
+  const set = state.labelSets[type];
+  const i = set ? set.indexOf(name) : -1;
+  if (i < 0) return;
+  set.splice(i, 1);
+  if (state.activeLabel[type] === name) state.activeLabel[type] = set[0] || '';
+  rebuildLabelSelect();
+}
+
+// Toolbar: paint the Area/Object toggle + fill the label <select> for the active
+// type. Also refreshes the sidebar Draw settings panel (single source of truth).
+export function rebuildLabelSelect() {
+  for (const t of LABEL_TYPES) {
+    const btn = $('#type-' + t);
+    if (btn) { btn.classList.toggle('active', state.activeType === t); btn.style.setProperty('--type-col', TYPE_COLORS[t]); }
+  }
+  const sel = $('#label-select');
+  if (sel) {
+    while (sel.firstChild) sel.removeChild(sel.firstChild);
+    for (const l of state.labelSets[state.activeType] || []) {
+      const o = document.createElement('option'); o.value = l; o.textContent = l;
+      sel.appendChild(o);
+    }
+    sel.value = currentLabel();
+  }
+  saveLabels();
+  rebuildDrawSettings();
+}
+
+// Sidebar Draw panel: per-type label chips (click to select, × to remove) + an
+// add-label input. The active type/label are highlighted.
+export function rebuildDrawSettings() {
+  const root = $('#draw-settings');
+  if (!root) return;
+  while (root.firstChild) root.removeChild(root.firstChild);
+  for (const type of LABEL_TYPES) {
+    const sec = document.createElement('div');
+    sec.className = 'draw-type' + (state.activeType === type ? ' active' : '');
+    sec.style.setProperty('--type-col', TYPE_COLORS[type]);
+
+    const head = document.createElement('button');
+    head.type = 'button'; head.className = 'draw-type-head';
+    head.title = `Draw ${type} — exports to [${type === 'area' ? 'rooms' : 'locations'}]`;
+    const dot = document.createElement('span'); dot.className = 'type-dot'; head.appendChild(dot);
+    const nm = document.createElement('span'); nm.className = 'draw-type-name'; nm.textContent = type; head.appendChild(nm);
+    const role = document.createElement('em'); role.className = 'muted'; role.textContent = type === 'area' ? '→ rooms' : '→ locations'; head.appendChild(role);
+    head.onclick = () => setActiveType(type);
+    sec.appendChild(head);
+
+    const chips = document.createElement('div'); chips.className = 'chip-list';
+    for (const label of state.labelSets[type]) {
+      const chip = document.createElement('span');
+      const isSel = state.activeType === type && currentLabel() === label;
+      chip.className = 'chip' + (isSel ? ' sel' : '');
+      const t = document.createElement('span'); t.className = 'chip-t'; t.textContent = label;
+      t.onclick = () => { state.activeType = type; setActiveLabel(label); };
+      chip.appendChild(t);
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'chip-x'; x.textContent = '×'; x.title = 'remove label';
+      x.onclick = (ev) => { ev.stopPropagation(); removeLabelFromType(type, label); };
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    }
+    sec.appendChild(chips);
+
+    const addRow = document.createElement('div'); addRow.className = 'chip-add';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.placeholder = `add ${type} label…`;
+    inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); if (addLabelToType(type, inp.value)) inp.value = ''; } };
+    addRow.appendChild(inp);
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'mini'; add.textContent = '+'; add.title = `add a ${type} label`;
+    add.onclick = () => { if (addLabelToType(type, inp.value)) inp.value = ''; };
+    addRow.appendChild(add);
+    sec.appendChild(addRow);
+
+    root.appendChild(sec);
+  }
+}
+
+export function saveLabels() {
+  try {
+    localStorage.setItem('walkie-label-sets', JSON.stringify({
+      sets: state.labelSets, active: state.activeType, labels: state.activeLabel,
+    }));
+  } catch {}
+}
 export function loadLabels() {
   try {
-    const s = JSON.parse(localStorage.getItem('walkie-labels') || '[]');
-    for (const l of s) if (!state.labels.includes(l)) state.labels.push(l);
+    const s = JSON.parse(localStorage.getItem('walkie-label-sets') || 'null');
+    if (!s || !s.sets) return;
+    for (const t of LABEL_TYPES) if (Array.isArray(s.sets[t])) state.labelSets[t] = s.sets[t].slice();
+    if (LABEL_TYPES.includes(s.active)) state.activeType = s.active;
+    if (s.labels) for (const t of LABEL_TYPES) if (typeof s.labels[t] === 'string') state.activeLabel[t] = s.labels[t];
   } catch {}
 }
 

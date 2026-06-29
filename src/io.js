@@ -369,6 +369,8 @@ export function normalizeElement(e) {
     id: e.id || `e${state.nextId++}`,
     label: e.label || 'unknown',
     type: e.type || 'polygon',
+    // Structured draw type: 'area' | 'object' (undefined for no-go / legacy shapes).
+    semType: e.semType === 'area' || e.semType === 'object' ? e.semType : undefined,
     closed: !!e.closed,
     asNogo: !!e.asNogo,
     coords: Array.isArray(e.coords) ? e.coords.map(c => [+c[0], +c[1]]) : [],
