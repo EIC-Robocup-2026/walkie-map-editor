@@ -13,7 +13,7 @@ export const WAYPOINT_ARROW_PX = 26;
 // Tool quick-select keybinds. TOOL_ORDER mirrors the toolbar button order so
 // Shift+1 = first tool, Shift+2 = second, … TOOL_SHORTCUT_CODES uses KeyboardEvent
 // .code (layout-independent) so Shift+1 works regardless of what "!" maps to.
-export const TOOL_ORDER = ['pen', 'eraser', 'restore', 'select', 'point', 'rect', 'polygon', 'nogo', 'waypoint'];
+export const TOOL_ORDER = ['pen', 'eraser', 'restore', 'select', 'point', 'rect', 'polygon', 'nogo', 'waypoint', 'door'];
 export const TOOL_SHORTCUT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 export const TOOL_SHORTCUT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
 
@@ -25,6 +25,12 @@ export const SUGGEST_LOCATION_NAMES = ['dining_table', 'kitchen_bar', 'dishwashe
   'breakfast_surface', 'extra_surface', 'laundry_area', 'laundry_basket', 'folding_table',
   'washing_machine', 'entrance_door'];
 export const SUGGEST_CATEGORIES = ['table', 'shelf', 'cabinet', 'counter', 'bin', 'sofa', 'chair', 'bed', 'sink', 'door', 'appliance', 'rack'];
+// Door waypoint name suggestions (free text — arenas vary). A door is exported to
+// world.toml's [doors] table; the robot's door-opening skill engages near it.
+export const SUGGEST_DOOR_NAMES = ['entrance', 'entrance_door', 'exit', 'kitchen_door', 'hallway_door', 'bedroom_door'];
+// Fallback door trigger radius (m) for the dashed activation ring, when a door has
+// no explicit radius. Matches walkie-agent-v2's WALKIE_DOOR_NEAR_RADIUS_M default.
+export const DOOR_DEFAULT_RADIUS_M = 1.5;
 // Arena-vocabulary key suggestions (GPSR). Free text — arenas vary — but these are
 // the usual RoboCup categories/gestures so they're picked, not retyped.
 export const SUGGEST_OBJECT_CATEGORIES = ['drinks', 'snacks', 'fruits', 'food', 'dishes', 'cleaning_supplies', 'toys', 'containers'];

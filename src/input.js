@@ -158,9 +158,12 @@ canvas.addEventListener('mousedown', (ev) => {
     state.prevPaintPt = null;
     strokeTo(p.px, p.py);
     draw();
-  } else if (state.tool === 'waypoint') {
-    state.drawing = { id: 'tmp', type: 'waypoint', label: 'waypoint',
-      coords: [[w.wx, w.wy]], closed: false, asNogo: false, ...defaultWaypointFields() };
+  } else if (state.tool === 'waypoint' || state.tool === 'door') {
+    // A door is a waypoint with role pre-set to 'door' (reuses click-place +
+    // drag-to-aim); the Waypoint tool leaves role unset for the inspector.
+    const role = state.tool === 'door' ? 'door' : '';
+    state.drawing = { id: 'tmp', type: 'waypoint', label: role || 'waypoint',
+      coords: [[w.wx, w.wy]], closed: false, asNogo: false, ...defaultWaypointFields({ role }) };
     draw();
   } else if (state.tool === 'point') {
     addElement({ type: 'point', label: currentLabel(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
@@ -297,7 +300,7 @@ canvas.addEventListener('mouseup', (ev) => {
     state.drawing = null;
     addElement(el);
   }
-  if (state.tool === 'waypoint' && state.drawing && state.drawing.type === 'waypoint') {
+  if ((state.tool === 'waypoint' || state.tool === 'door') && state.drawing && state.drawing.type === 'waypoint') {
     const wp = state.drawing;
     state.drawing = null;
     addElement(wp);            // assigns wp.id

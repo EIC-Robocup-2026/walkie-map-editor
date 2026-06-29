@@ -2,7 +2,7 @@
 // brush cursor, and scale bar.
 'use strict';
 
-import { state, WAYPOINT_ARROW_PX } from './state.js';
+import { state, WAYPOINT_ARROW_PX, DOOR_DEFAULT_RADIUS_M } from './state.js';
 import { $, canvas, ctx, off, offCtx, offOrig, offOrigCtx, worldToPx, screenToPx } from './dom.js';
 import { kindOf, isVisible } from './elements.js';
 import { cursorPx } from './input.js';
@@ -167,7 +167,10 @@ function drawElement(e, selected, preview = false) {
   const nogoFill = e.type === 'nogo' || (e.asNogo && e.closed);
   const wp = e.type === 'waypoint';
   const hovered = !selected && state.hoverId === e.id;   // list↔canvas hover link
-  const wpCol = e.role === 'room' ? '#f59e0b' : e.role === 'location' ? '#34d399' : '#a78bfa';
+  const wpCol = e.role === 'room' ? '#f59e0b'
+    : e.role === 'location' ? '#34d399'
+    : e.role === 'door' ? '#f472b6'
+    : '#a78bfa';
   const col = selected ? '#ffeb3b' : hovered ? '#ffffff' : nogoFill ? '#ff4444' : wp ? wpCol : '#22d3ee';
   ctx.lineWidth = (selected ? 2 : hovered ? 2.5 : 1.5) / state.view.s;
   ctx.strokeStyle = col;
@@ -188,6 +191,18 @@ function drawElement(e, selected, preview = false) {
     ctx.lineTo(ex - ah * Math.cos(a + 0.4), ey - ah * Math.sin(a + 0.4));
     ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2); ctx.fill();
+    // Door: dashed ring at the proximity-trigger radius — where the robot's
+    // door-opening skill engages (per-door radius, else the global default).
+    if (e.role === 'door') {
+      const rm = Number.isFinite(+e.radius) && +e.radius > 0 ? +e.radius : DOOR_DEFAULT_RADIUS_M;
+      const rpx = rm / state.meta.resolution;
+      ctx.save();
+      ctx.setLineDash([5 / state.view.s, 4 / state.view.s]);
+      ctx.lineWidth = 1.2 / state.view.s;
+      ctx.strokeStyle = col;
+      ctx.beginPath(); ctx.arc(p.px, p.py, rpx, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   } else if (e.type === 'point') {
     const p = pts[0];
     const r = 5 / state.view.s;

@@ -71,12 +71,14 @@ A dashed rubber-band line follows the cursor while drawing.
 | Tool | Click behaviour |
 |---|---|
 | Waypoint | click to place the robot's stand position, then **drag to aim its heading** (release commits) |
+| Door | mark a *physical door*: click to place, **drag to aim the passage direction**. A door is a waypoint with role pre-set to `door`; it exports to `world.toml` `[doors]` and the robot's door-opening skill engages when it's within the door's trigger radius (the dashed ring on the canvas) |
 
 A waypoint stores a full pose `(x, y, heading)`. Select it (Select tool or the
 sidebar list) and fill the **Waypoint** inspector in the sidebar:
 
-- **role** — dropdown: `room`, `location`, or `(not exported)`. Only
-  `room`/`location` waypoints land in `world.toml`.
+- **role** — dropdown: `room`, `location`, `door`, or `(not exported)`. Only
+  `room`/`location`/`door` waypoints land in `world.toml` (as `[rooms.*]` /
+  `[locations.*]` / `[doors.*]`).
 - **name** — the canonical id (auto-snake_cased, e.g. `kitchen_table`); must be
   unique. The box is a **combo**: it suggests the challenge-contract names
   (role-aware — room names vs location names) so you pick them instead of
@@ -87,9 +89,18 @@ sidebar list) and fill the **Waypoint** inspector in the sidebar:
   existing labels. **placement** / **aliases** / **barrier** / **present** —
   see the [schema](#worldtoml--walkie-agent-v2-map).
 - **heading °** — edit the facing angle numerically (degrees) if dragging
-  wasn't precise enough.
+  wasn't precise enough. (For a `door` this is the **passage °**, display-only.)
+- **radius m** (doors only) — the proximity-trigger radius: the robot asks for
+  *this* door only inside this circle. Blank = the robot's global default
+  (`WALKIE_DOOR_NEAR_RADIUS_M`, 1.5 m). The dashed ring previews it.
 
-Re-aim a committed waypoint by re-drawing it with the Waypoint tool.
+Re-aim a committed waypoint by re-drawing it with the Waypoint (or Door) tool.
+
+> **Door vs. `barrier`.** A `door` is a geographic point — the robot engages its
+> open-the-door routine when it's near one, on any route. The `barrier` flag on a
+> room/location instead gates *by destination* (ask when nav to that place is
+> blocked). Use a `door` for "there's a physical door here"; use `barrier` for
+> "the way to this spot may be shut". They're independent — set either or both.
 
 **Arena vocabulary (GPSR)** — a sidebar panel of structured row editors for the
 non-spatial nouns GPSR grounds against:
@@ -117,9 +128,9 @@ These round-trip through `_element.json` so re-exporting never loses them.
 
 **Tool shortcuts**
 
-- `Shift`+`1`…`9` quick-select tools, in toolbar order: Pen, Eraser, Restore,
-  Select, Point, Rect, Polygon, No-Go, Waypoint (the binding is shown in each
-  tool button's tooltip).
+- `Shift`+`1`…`0` quick-select tools, in toolbar order: Pen, Eraser, Restore,
+  Select, Point, Rect, Polygon, No-Go, Waypoint, Door (`Shift`+`0`) — the binding
+  is shown in each tool button's tooltip.
 
 **Command palette & navigation**
 
@@ -239,6 +250,11 @@ placement = true                 # optional — a surface you can put objects on
 category = "table"               # optional
 aliases = ["dining table"]
 
+[doors.entrance]                 # a physical door; the robot asks for it when near
+pose = [0.00, 0.00, 1.57]        # [x_m, y_m, passage_heading_rad] (heading display-only)
+radius = 1.5                     # optional — trigger radius (m); default WALKIE_DOOR_NEAR_RADIUS_M
+# present = false                # optional — drop a door not in the running arena
+
 [object_categories]
 drinks = ["cola", "water", "milk"]
 
@@ -270,13 +286,14 @@ aliases = ["waving person"]
 
       "// waypoint-only fields": "present when type == waypoint",
       "heading": 1.57,
-      "role": "room | location | \"\"",
+      "role": "room | location | door | \"\"",
       "name": "kitchen_table",
       "room": "kitchen",
       "category": "table",
       "aliases": ["dining table"],
       "placement": true,
       "barrier": false,
+      "radius": null,
       "present": true
     }
   ],

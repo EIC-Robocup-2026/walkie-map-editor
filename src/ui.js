@@ -5,7 +5,7 @@
 import {
   state, markDirty,
   SUGGEST_ROOM_NAMES, SUGGEST_LOCATION_NAMES, SUGGEST_CATEGORIES,
-  SUGGEST_OBJECT_CATEGORIES, SUGGEST_GESTURES,
+  SUGGEST_OBJECT_CATEGORIES, SUGGEST_GESTURES, SUGGEST_DOOR_NAMES, DOOR_DEFAULT_RADIUS_M,
 } from './state.js';
 import { $, canvas } from './dom.js';
 import { canon, splitList } from './pure.js';
@@ -193,7 +193,7 @@ export function rebuildInspector() {
   };
 
   const roleSel = document.createElement('select');
-  for (const [v, t] of [['', '(not exported)'], ['room', 'room'], ['location', 'location']]) {
+  for (const [v, t] of [['', '(not exported)'], ['room', 'room'], ['location', 'location'], ['door', 'door']]) {
     const o = document.createElement('option'); o.value = v; o.textContent = t; roleSel.appendChild(o);
   }
   roleSel.value = el.role || '';
@@ -206,6 +206,7 @@ export function rebuildInspector() {
   fillDatalist('wp-name-options',
     el.role === 'room' ? SUGGEST_ROOM_NAMES
       : el.role === 'location' ? SUGGEST_LOCATION_NAMES
+      : el.role === 'door' ? SUGGEST_DOOR_NAMES
       : [...SUGGEST_ROOM_NAMES, ...SUGGEST_LOCATION_NAMES]);
   nameIn.onchange = () => { const nm = canon(nameIn.value); commit({ name: nm, label: nm || 'waypoint' }); };
   field('name', nameIn);
@@ -241,17 +242,31 @@ export function rebuildInspector() {
     let deg = parseFloat(headIn.value); if (!Number.isFinite(deg)) deg = 0;
     commit({ heading: deg * Math.PI / 180 });
   };
-  field('heading °', headIn);
+  field(el.role === 'door' ? 'passage °' : 'heading °', headIn);
 
-  const aliasIn = document.createElement('input');
-  aliasIn.type = 'text'; aliasIn.value = (el.aliases || []).join(', '); aliasIn.placeholder = 'comma, separated';
-  aliasIn.onchange = () => commit({ aliases: aliasIn.value.split(',').map(s => s.trim()).filter(Boolean) });
-  field('aliases', aliasIn);
+  if (el.role === 'door') {
+    // Proximity-trigger radius (m): blank -> the robot's global default. The dashed
+    // ring on the canvas previews this; the robot asks for this door inside it.
+    const radIn = document.createElement('input');
+    radIn.type = 'number'; radIn.step = '0.1'; radIn.min = '0';
+    radIn.value = el.radius == null ? '' : el.radius;
+    radIn.placeholder = `default ${DOOR_DEFAULT_RADIUS_M}`;
+    radIn.onchange = () => {
+      const v = radIn.value.trim();
+      commit({ radius: v === '' ? null : (Number.isFinite(+v) && +v > 0 ? +v : null) });
+    };
+    field('radius m', radIn);
+  } else {
+    const aliasIn = document.createElement('input');
+    aliasIn.type = 'text'; aliasIn.value = (el.aliases || []).join(', '); aliasIn.placeholder = 'comma, separated';
+    aliasIn.onchange = () => commit({ aliases: aliasIn.value.split(',').map(s => s.trim()).filter(Boolean) });
+    field('aliases', aliasIn);
 
-  const barCb = document.createElement('input');
-  barCb.type = 'checkbox'; barCb.checked = !!el.barrier;
-  barCb.onchange = () => commit({ barrier: barCb.checked });
-  field('barrier', barCb);
+    const barCb = document.createElement('input');
+    barCb.type = 'checkbox'; barCb.checked = !!el.barrier;
+    barCb.onchange = () => commit({ barrier: barCb.checked });
+    field('barrier', barCb);
+  }
 
   const presCb = document.createElement('input');
   presCb.type = 'checkbox'; presCb.checked = el.present !== false;

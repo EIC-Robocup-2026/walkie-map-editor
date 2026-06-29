@@ -163,6 +163,20 @@ export function buildWorldTomlFrom(elements, vocab) {
     if (!e.present) lines.push('present = false');
   }
 
+  // Doors: physical door locations the robot's door-opening skill engages near.
+  // pose heading = passage direction (display-only on the robot); optional radius
+  // overrides WALKIE_DOOR_NEAR_RADIUS_M.
+  const doors = elements.filter(e => e.type === 'waypoint' && e.role === 'door');
+  for (const e of doors) {
+    const name = canon(e.name);
+    if (!name) continue;
+    lines.push('', `[doors.${tomlKey(name)}]`);
+    lines.push(`pose = [${poseOf(e).map(fmtNum).join(', ')}]`);
+    if (e.radius != null && Number.isFinite(+e.radius) && +e.radius > 0)
+      lines.push(`radius = ${fmtNum(e.radius)}`);
+    if (!e.present) lines.push('present = false');
+  }
+
   const cats = (vocab && vocab.object_categories) || {};
   const catKeys = Object.keys(cats).filter(k => canon(k));
   if (catKeys.length) {
@@ -190,8 +204,9 @@ export function worldIssuesFrom(elements, vocab) {
   const errors = [], warnings = [];
   const rooms = elements.filter(e => e.type === 'waypoint' && e.role === 'room');
   const locs = elements.filter(e => e.type === 'waypoint' && e.role === 'location');
+  const doors = elements.filter(e => e.type === 'waypoint' && e.role === 'door');
 
-  // canon-collision within a namespace => duplicate [rooms.x]/[locations.x] header.
+  // canon-collision within a namespace => duplicate [rooms.x]/[locations.x]/[doors.x] header.
   const keysOf = (items, what) => {
     const seen = new Map();
     for (const e of items) {
@@ -204,6 +219,7 @@ export function worldIssuesFrom(elements, vocab) {
   };
   const roomKeys = keysOf(rooms, 'rooms');
   const locKeys = keysOf(locs, 'locations');
+  keysOf(doors, 'doors');
 
   // vocab canon-collisions => duplicate key / [gestures.x] header.
   const dupVocab = (table, what) => {
@@ -233,7 +249,7 @@ export function worldIssuesFrom(elements, vocab) {
     if (roomKeys.has(nm)) warnings.push(`"${nm}" is both a room and a location — the location will shadow the room when the robot resolves that name`);
 
   // a non-finite pose would be silently written as 0 by fmtNum — surface it.
-  for (const e of [...rooms, ...locs]) {
+  for (const e of [...rooms, ...locs, ...doors]) {
     if (!poseOf(e).every(Number.isFinite))
       warnings.push(`${e.role} "${canon(e.name) || ('#' + e.id)}" has a non-finite pose — it will export as 0`);
   }
