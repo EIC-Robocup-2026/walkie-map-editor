@@ -7,7 +7,7 @@
 import { state, TOOL_ORDER, TOOL_SHORTCUT_KEYS } from './state.js';
 import { $, canvas } from './dom.js';
 import { draw } from './render.js';
-import { loadFolder, exportAll, loadDroppedItems } from './io.js';
+import { loadFolder, exportAll, loadDroppedItems, loadOtFile, rebuildRefFromZRange } from './io.js';
 import { undo, redoFn } from './history.js';
 import { setTool } from './input.js';
 import { clearAllElements } from './elements.js';
@@ -39,6 +39,48 @@ $('#fit').addEventListener('click', fitView);
 $('#clear-elems').addEventListener('click', clearAllElements);
 $('#toggle-ids').addEventListener('change', (ev) => { state.showIds = ev.target.checked; draw(); });
 $('#toggle-orig').addEventListener('change', (ev) => { state.showOriginalOverlay = ev.target.checked; draw(); });
+// Clicking the cube icon when no ref is loaded opens the .ot single-file picker
+// instead of toggling, bypassing Firefox's webkitdirectory FileList bug.
+$('#toggle-ref-wrap').addEventListener('click', (ev) => {
+  if (!state.refImage) { ev.preventDefault(); $('#ot-input').click(); }
+}, true);
+$('#toggle-ref').addEventListener('change', (ev) => {
+  if (!state.refImage) { ev.target.checked = false; return; }
+  state.showRefOverlay = ev.target.checked;
+  draw();
+});
+$('#ot-input').addEventListener('change', async (ev) => {
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (f) await loadOtFile(f);
+});
+$('#ref-zmin').addEventListener('change', (ev) => { state.refZMin = +ev.target.value; rebuildRefFromZRange(); });
+$('#ref-zmax').addEventListener('change', (ev) => { state.refZMax = +ev.target.value; rebuildRefFromZRange(); });
+$('#ref-opacity').addEventListener('input', (ev) => {
+  state.refOpacity = +ev.target.value;
+  const valSpan = $('#ref-opacity-val');
+  if (valSpan) valSpan.textContent = `${Math.round(state.refOpacity * 100)}%`;
+  draw();
+});
+$('#ref-scale').addEventListener('input', (ev) => {
+  state.refUserScale = +ev.target.value;
+  const valSpan = $('#ref-scale-val');
+  if (valSpan) valSpan.textContent = `${state.refUserScale.toFixed(2)}×`;
+  draw();
+});
+$('#ref-offset-x').addEventListener('input', (ev) => { state.refOffsetX = +ev.target.value; draw(); });
+$('#ref-offset-y').addEventListener('input', (ev) => { state.refOffsetY = +ev.target.value; draw(); });
+$('#ref-move-btn').addEventListener('click', () => {
+  state.refMoveMode = !state.refMoveMode;
+  $('#ref-move-btn').classList.toggle('active', state.refMoveMode);
+  canvas.style.cursor = state.refMoveMode ? 'move' : 'default';
+});
+$('#ref-reset-btn').addEventListener('click', () => {
+  state.refOffsetX = 0; state.refOffsetY = 0; state.refUserScale = 1.0;
+  $('#ref-offset-x').value = 0; $('#ref-offset-y').value = 0;
+  $('#ref-scale').value = 1; $('#ref-scale-val').textContent = '1.00×';
+  draw();
+});
 
 // Command palette / cheat-sheet / sidebar controls
 $('#cmd-search').addEventListener('click', openPalette);

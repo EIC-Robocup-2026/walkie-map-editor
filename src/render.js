@@ -3,7 +3,7 @@
 'use strict';
 
 import { state, WAYPOINT_ARROW_PX, DOOR_DEFAULT_RADIUS_M } from './state.js';
-import { $, canvas, ctx, off, offCtx, offOrig, offOrigCtx, worldToPx, screenToPx } from './dom.js';
+import { $, canvas, ctx, off, offCtx, offOrig, offOrigCtx, offRef, offRefCtx, worldToPx, screenToPx } from './dom.js';
 import { kindOf, isVisible } from './elements.js';
 import { cursorPx } from './input.js';
 
@@ -15,6 +15,15 @@ export function renderPixels() {
     id.data[j] = g; id.data[j+1] = g; id.data[j+2] = g; id.data[j+3] = 255;
   }
   offCtx.putImageData(id, 0, 0);
+}
+
+// Render the 3D OctoMap reference ImageBitmap into its own buffer once per load.
+export function renderRef() {
+  if (!state.refImage || !state.refMeta) return;
+  offRef.width = state.refMeta.width;
+  offRef.height = state.refMeta.height;
+  offRefCtx.clearRect(0, 0, offRef.width, offRef.height);
+  offRefCtx.drawImage(state.refImage, 0, 0);
 }
 
 // Render the pristine _og.pgm into its own buffer once per load — it never
@@ -45,6 +54,24 @@ export function draw() {
     ctx.save();
     ctx.globalAlpha = 0.6;
     ctx.drawImage(offOrig, 0, 0);
+    ctx.restore();
+  }
+  if (state.showRefOverlay && state.refMeta && offRef.width) {
+    const rm = state.refMeta, mm = state.meta;
+    const baseScale = rm.resolution / mm.resolution;
+    const finalScale = baseScale * state.refUserScale;
+    // Base top-left in map-pixel space (at baseScale, no user offset)
+    const baseDx = (rm.origin[0] - mm.origin[0]) / mm.resolution;
+    const baseDy = state.h - (rm.origin[1] - mm.origin[1]) / mm.resolution - rm.height * baseScale;
+    // Scale from the overlay's center so the image grows/shrinks in place
+    const cx = baseDx + rm.width * baseScale / 2;
+    const cy = baseDy + rm.height * baseScale / 2;
+    const finalDx = cx - rm.width * finalScale / 2 + state.refOffsetX;
+    const finalDy = cy - rm.height * finalScale / 2 + state.refOffsetY;
+    ctx.save();
+    ctx.globalAlpha = state.refOpacity;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(offRef, finalDx, finalDy, rm.width * finalScale, rm.height * finalScale);
     ctx.restore();
   }
   drawGrid();

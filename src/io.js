@@ -6,24 +6,99 @@ import { state, FREE, OCC } from './state.js';
 import { $, worldToPx } from './dom.js';
 import {
   parsePGM, writePGM, parseYAML, writeYAML, rasterPoly,
-  buildWorldTomlFrom, worldIssuesFrom, normalizeVocab,
+  buildWorldTomlFrom, worldIssuesFrom, normalizeVocab, parseOctomap,
 } from './pure.js';
-import { renderPixels, renderOriginal } from './render.js';
+import { renderPixels, renderOriginal, renderRef, draw } from './render.js';
 import { makeZip } from './zip.js';
 import {
   rebuildLabelSelect, rebuildElemList, rebuildVisibility, rebuildInspector,
   rebuildVocabUI, updateInfo, status, fitView,
 } from './ui.js';
 
+// Convert { resolution, xs, ys, zs } from parseOctomap() into an ImageData heatmap.
+// The image is built at the OctoMap's own voxel resolution (one pixel per voxel),
+// then drawn in render.js at scale = ot_res / map_res so it aligns with the map.
+// A clip rect in render.js confines it to the map boundary.
+// Returns null if the voxel arrays are empty.
+function buildRefFromVoxels({ resolution, xs, ys, zs }, zFilterMin = -Infinity, zFilterMax = Infinity) {
+  if (!xs.length) return null;
+
+  // First pass: XY bbox + Z range using only voxels within the Z filter.
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+  let zMin = Infinity, zMax = -Infinity;
+  for (let i = 0; i < xs.length; i++) {
+    if (zs[i] < zFilterMin || zs[i] > zFilterMax) continue;
+    if (xs[i] < xMin) xMin = xs[i]; if (xs[i] > xMax) xMax = xs[i];
+    if (ys[i] < yMin) yMin = ys[i]; if (ys[i] > yMax) yMax = ys[i];
+    if (zs[i] < zMin) zMin = zs[i]; if (zs[i] > zMax) zMax = zs[i];
+  }
+  if (!isFinite(xMin)) return null; // no voxels survive the filter
+
+  const originX = Math.floor(xMin / resolution) * resolution;
+  const originY = Math.floor(yMin / resolution) * resolution;
+  const MAX_DIM = 2048;
+  const width  = Math.min(MAX_DIM, Math.max(1, Math.ceil((xMax - originX) / resolution) + 1));
+  const height = Math.min(MAX_DIM, Math.max(1, Math.ceil((yMax - originY) / resolution) + 1));
+
+  // Accumulate max-Z per 2D cell (Y-flipped: row 0 = highest world-Y)
+  const zMaxGrid = new Float32Array(width * height).fill(-1e9);
+  for (let i = 0; i < xs.length; i++) {
+    if (zs[i] < zFilterMin || zs[i] > zFilterMax) continue;
+    const col = Math.round((xs[i] - originX) / resolution);
+    const row = height - 1 - Math.round((ys[i] - originY) / resolution);
+    if (col < 0 || col >= width || row < 0 || row >= height) continue;
+    const idx = row * width + col;
+    if (zs[i] > zMaxGrid[idx]) zMaxGrid[idx] = zs[i];
+  }
+
+  // RGBA heatmap: green (floor of filter range) → yellow (mid) → red (ceiling)
+  const zRange = Math.max(zMax - zMin, 1e-6);
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    const z = zMaxGrid[i];
+    if (z <= -1e8) continue;
+    const t = (z - zMin) / zRange;
+    const j = i * 4;
+    pixels[j]     = t < 0.5 ? Math.round(t * 2 * 255) : 255;
+    pixels[j + 1] = t < 0.5 ? 255 : Math.round((1 - (t - 0.5) * 2) * 255);
+    pixels[j + 2] = 0;
+    pixels[j + 3] = 200;
+  }
+
+  return {
+    imageData: new ImageData(pixels, width, height),
+    meta: { origin: [originX, originY], resolution, width, height, z_range: [zMin, zMax] },
+  };
+}
+
+// Rebuild the ref image from stored raw voxels after a Z-filter change.
+export async function rebuildRefFromZRange() {
+  if (!state.refVoxels) return;
+  const ref = buildRefFromVoxels(state.refVoxels, state.refZMin, state.refZMax);
+  if (!ref) { status(`no voxels in Z range [${state.refZMin.toFixed(2)}, ${state.refZMax.toFixed(2)}] m`); return; }
+  state.refImage = await createImageBitmap(ref.imageData);
+  state.refMeta  = ref.meta;
+  renderRef();
+  draw();
+  updateInfo();
+  status(`3D ref filtered: z [${state.refZMin.toFixed(2)}, ${state.refZMax.toFixed(2)}] m — ${ref.meta.width}×${ref.meta.height}px`);
+}
+
 export async function loadFolder(files) {
-  let pgm = null, og = null, yaml = null, elemJson = null;
+  let pgm = null, og = null, yaml = null, elemJson = null,
+      refPng = null, refJson = null, otFile = null;
   for (const f of files) {
     const n = f.name.toLowerCase();
     if (n.endsWith('_og.pgm')) og = f;
+    else if (n.endsWith('_3dref.png')) refPng = f;
+    else if (n.endsWith('_3dref.json')) refJson = f;
+    else if (n.endsWith('.ot') || n.endsWith('.bt')) otFile = otFile || f;
     else if (n.endsWith('.pgm') && !n.endsWith('_keepout.pgm')) pgm = pgm || f;
     else if (n.endsWith('.yaml') || n.endsWith('.yml')) yaml = f;
     else if (n.endsWith('_element.json') || n.endsWith('_elements.json')) elemJson = f;
   }
+  console.log('[load] files:', Array.from(files).map(f => f.name));
+  console.log('[load] pgm:', pgm?.name, '  yaml:', yaml?.name, '  ot:', otFile?.name, '  refPng:', refPng?.name);
   if (!pgm) { status('error: no .pgm in folder'); return; }
   if (!yaml) { status('error: no .yaml in folder'); return; }
 
@@ -62,6 +137,13 @@ export async function loadFolder(files) {
   state.hiddenKinds.clear();
   state.vocab = { object_categories: {}, names: [], gestures: {} };
   state.selected = null;
+  state.refImage = null;
+  state.refMeta = null;
+  state.showRefOverlay = false;
+  state.refOffsetX = 0; state.refOffsetY = 0; state.refUserScale = 1.0; state.refMoveMode = false;
+  state.refVoxels = null; state.refZMin = -Infinity; state.refZMax = Infinity;
+  const refToggle = $('#toggle-ref');
+  if (refToggle) refToggle.checked = false;
   let loadedCount = 0;
   if (elemJson) {
     try {
@@ -82,6 +164,79 @@ export async function loadFolder(files) {
   }
   state.nextId = maxId + 1;
 
+  // Load 3D reference overlay — prefer pre-generated PNG pair, fall back to .ot/.bt
+  let refNote = '';
+  if (refPng && refJson) {
+    try {
+      const rm = JSON.parse(await refJson.text());
+      if (Array.isArray(rm.origin) && rm.origin.length === 2
+          && typeof rm.resolution === 'number'
+          && typeof rm.width === 'number' && typeof rm.height === 'number') {
+        const blob = new Blob([await refPng.arrayBuffer()], { type: 'image/png' });
+        state.refImage = await createImageBitmap(blob);
+        state.refMeta = rm;
+        state.showRefOverlay = true;
+        const refTogglePng = $('#toggle-ref');
+        if (refTogglePng) refTogglePng.checked = true;
+        const resDiff = Math.abs(rm.resolution - meta.resolution) / meta.resolution;
+        refNote = resDiff > 0.01
+          ? `; ⚠ 3D ref res ${rm.resolution}m ≠ map ${meta.resolution}m`
+          : `; 3D ref ${rm.width}×${rm.height}px`;
+      } else {
+        console.warn('3D ref JSON missing required fields', rm);
+        refNote = '; 3D ref JSON invalid (see console)';
+      }
+    } catch (e) {
+      console.warn('3D ref PNG load failed', e);
+      refNote = '; 3D ref load failed (see console)';
+    }
+  } else if (refPng && !refJson) {
+    refNote = '; _3dref.png found but no _3dref.json — skipped';
+  } else if (refJson && !refPng) {
+    refNote = '; _3dref.json found but no _3dref.png — skipped';
+  } else if (otFile) {
+    // Direct in-browser OctoMap parsing — no Python or conversion tools needed.
+    const OT_MAX_BYTES = 150 * 1024 * 1024; // 150 MB
+    if (otFile.size > OT_MAX_BYTES) {
+      refNote = `; ${otFile.name} too large (${(otFile.size / 1e6).toFixed(0)}MB) — file exceeds 150 MB limit`;
+    } else {
+      try {
+        console.log('[3D ref] reading', otFile.name, `(${(otFile.size / 1e6).toFixed(1)}MB)`);
+        status(`parsing ${otFile.name}…`);
+        await new Promise(r => setTimeout(r, 0)); // yield so the status text renders
+        const buf = await otFile.arrayBuffer();
+        console.log('[3D ref] buffer read, parsing OctoMap…');
+        const otParsed = parseOctomap(buf);
+        console.log('[3D ref] parsed:', otParsed.xs.length, 'occupied voxels, resolution:', otParsed.resolution);
+        state.refVoxels = otParsed;
+        // Default Z filter = full data range
+        let zLo = otParsed.zs[0], zHi = otParsed.zs[0];
+        for (let i = 1; i < otParsed.zs.length; i++) {
+          if (otParsed.zs[i] < zLo) zLo = otParsed.zs[i];
+          if (otParsed.zs[i] > zHi) zHi = otParsed.zs[i];
+        }
+        state.refZMin = zLo; state.refZMax = zHi;
+        const ref = buildRefFromVoxels(otParsed, state.refZMin, state.refZMax);
+        if (ref) {
+          console.log('[3D ref] image built:', ref.meta.width, '×', ref.meta.height, 'origin:', ref.meta.origin);
+          state.refImage = await createImageBitmap(ref.imageData);
+          state.refMeta = ref.meta;
+          state.showRefOverlay = true;
+          const refToggleOt = $('#toggle-ref');
+          if (refToggleOt) refToggleOt.checked = true;
+          refNote = `; 3D ref from ${otFile.name} (${otParsed.xs.length.toLocaleString()} voxels)`;
+          console.log('[3D ref] done — overlay enabled');
+        } else {
+          refNote = `; ${otFile.name}: no occupied voxels found`;
+          console.warn('[3D ref] buildRefFromVoxels returned null — no voxels with logOdds > 0');
+        }
+      } catch (e) {
+        console.error('[3D ref] parse failed:', e);
+        refNote = `; OctoMap parse failed: ${e.message}`;
+      }
+    }
+  }
+
   rebuildLabelSelect();
   rebuildElemList();
   rebuildVisibility();
@@ -89,11 +244,60 @@ export async function loadFolder(files) {
   rebuildVocabUI();
   renderPixels();
   renderOriginal();   // populate the overlay buffer (original never mutates after load)
+  renderRef();        // populate 3D ref buffer (no-op if no ref loaded)
   fitView();
   updateInfo();
   $('#export-btn').disabled = false;
   state.dirty = false;
-  status(`loaded ${pgm.name} ${parsed.w}×${parsed.h}${ogNote}; elements: ${loadedCount}`);
+  status(`loaded ${pgm.name} ${parsed.w}×${parsed.h}${ogNote}${refNote}; elements: ${loadedCount}`);
+}
+
+// Load a single .ot/.bt file chosen via the dedicated OctoMap file picker.
+// Bypasses the Firefox webkitdirectory bug that poisons FileList reads when
+// a folder contains a .ot file alongside .pgm/.yaml.
+export async function loadOtFile(file) {
+  if (!state.meta) { status('load a map folder first (.pgm + .yaml)'); return; }
+  const OT_MAX_BYTES = 150 * 1024 * 1024;
+  if (file.size > OT_MAX_BYTES) {
+    status(`${file.name} too large (${(file.size / 1e6).toFixed(0)} MB) — file exceeds 150 MB limit`);
+    return;
+  }
+  status(`parsing ${file.name}…`);
+  await new Promise(r => setTimeout(r, 0));
+  try {
+    console.log('[3D ref] reading single file:', file.name, `(${(file.size / 1e6).toFixed(1)}MB)`);
+    const buf = await file.arrayBuffer();
+    console.log('[3D ref] buffer read, parsing OctoMap…');
+    const otParsed = parseOctomap(buf);
+    console.log('[3D ref] parsed:', otParsed.xs.length, 'voxels, res:', otParsed.resolution);
+    state.refVoxels = otParsed;
+    let zLo = otParsed.zs[0], zHi = otParsed.zs[0];
+    for (let i = 1; i < otParsed.zs.length; i++) {
+      if (otParsed.zs[i] < zLo) zLo = otParsed.zs[i];
+      if (otParsed.zs[i] > zHi) zHi = otParsed.zs[i];
+    }
+    state.refZMin = zLo; state.refZMax = zHi;
+    const ref = buildRefFromVoxels(otParsed, state.refZMin, state.refZMax);
+    if (ref) {
+      state.refImage = await createImageBitmap(ref.imageData);
+      state.refMeta  = ref.meta;
+      state.showRefOverlay = true;
+      state.refOffsetX = 0; state.refOffsetY = 0; state.refUserScale = 1.0; state.refMoveMode = false;
+      const toggle = $('#toggle-ref');
+      if (toggle) toggle.checked = true;
+      renderRef();
+      draw();
+      updateInfo();
+      status(`3D ref from ${file.name} (${otParsed.xs.length.toLocaleString()} voxels)`);
+      console.log('[3D ref] done — overlay enabled');
+    } else {
+      status(`${file.name}: no occupied voxels found`);
+      console.warn('[3D ref] no voxels with logOdds > 0');
+    }
+  } catch (e) {
+    console.error('[3D ref] parse failed:', e);
+    status(`OctoMap parse failed: ${e.message}`);
+  }
 }
 
 // Load a drag-and-dropped folder. Uses the webkitGetAsEntry directory API to
@@ -113,8 +317,21 @@ export async function loadDroppedItems(dataTransfer) {
   for (const it of items) { const e = it.webkitGetAsEntry && it.webkitGetAsEntry(); if (e) entries.push(e); }
 
   const files = [];
+  // Read each file's bytes eagerly inside the entry.file() callback (while the
+  // entry is still alive) to work around Firefox refusing arrayBuffer() later.
+  // FileReader is the most compatible path for drag-and-drop files in Firefox.
   const fileOf = (entry) => new Promise((res) => entry.file(
-    (f) => { try { Object.defineProperty(f, 'webkitRelativePath', { value: entry.fullPath.replace(/^\//, '') }); } catch {} res(f); },
+    (f) => {
+      const path = entry.fullPath.replace(/^\//, '');
+      const attach = (file) => {
+        try { Object.defineProperty(file, 'webkitRelativePath', { value: path }); } catch {}
+        res(file);
+      };
+      const reader = new FileReader();
+      reader.onload  = (e) => attach(new File([e.target.result], f.name, { type: f.type, lastModified: f.lastModified }));
+      reader.onerror = ()  => attach(f); // last-resort: pass original (may still DOMException later)
+      reader.readAsArrayBuffer(f);
+    },
     () => res(null)));
   const readDir = (dirEntry) => new Promise((res) => {
     const reader = dirEntry.createReader();
@@ -135,7 +352,16 @@ export async function loadDroppedItems(dataTransfer) {
     }
   }
   if (!files.length) { status('drop a folder containing map.pgm + map.yaml'); return; }
-  await loadFolder(files);
+  try {
+    await loadFolder(files);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      status('Firefox drag-and-drop: file read blocked — use the Load Folder button instead (folder icon in toolbar, or Ctrl+O)');
+      console.warn('Firefox drag-and-drop DOMException — use folder picker instead:', e);
+    } else {
+      throw e;
+    }
+  }
 }
 
 export function normalizeElement(e) {

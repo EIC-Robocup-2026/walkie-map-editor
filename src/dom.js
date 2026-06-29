@@ -13,6 +13,9 @@ export const offCtx = off.getContext('2d');
 // Offscreen for the original-map overlay (rendered lazily by render.js).
 export const offOrig = document.createElement('canvas');
 export const offOrigCtx = offOrig.getContext('2d');
+// Offscreen for the 3D OctoMap reference overlay (rendered once per load).
+export const offRef = document.createElement('canvas');
+export const offRefCtx = offRef.getContext('2d');
 
 // worldToPx(wx, wy): px = (wx - ox)/res, py = H - (wy - oy)/res
 export function worldToPx(wx, wy) {
