@@ -25,6 +25,9 @@ let nodeDrag = null;
 // Active body drag: translate the whole element (point/line/area). `before` is the
 // coords at grab time; `moved` gates committing an undo step (vs. a plain click).
 let bodyDrag = null;
+// Heading-aim mode: right-click a waypoint to rotate its heading with the cursor.
+// `before` is the heading at grab time (for cancel + a clean undo diff).
+let aiming = null;
 
 // Index of the selected element's vertex under cursor (screen-space px), or -1.
 function nodeAt(el, p) {
@@ -171,8 +174,39 @@ function commitDrawnElement(el) {
   }
 }
 
+// Heading-aim: start (right-click a waypoint), commit (any click), cancel (Esc).
+function startAim(el) {
+  aiming = { id: el.id, before: el.heading || 0 };
+  state.selected = el.id;
+  rebuildElemList(); rebuildInspector();
+  canvas.style.cursor = 'crosshair';
+  status('aiming heading — move the cursor, click to set, Esc to cancel');
+  draw();
+}
+function commitAim() {
+  const el = aiming && state.elements.find(e => e.id === aiming.id);
+  if (el) {
+    const finalHeading = el.heading || 0;
+    el.heading = aiming.before;                          // restore for a clean undo diff
+    updateElementFields(el.id, { heading: finalHeading });  // one undoable elem-mod
+    rebuildInspector();
+    status(`heading set to ${Math.round(finalHeading * 180 / Math.PI)}°`);
+  }
+  aiming = null;
+  draw();
+}
+function cancelAim() {
+  const el = aiming && state.elements.find(e => e.id === aiming.id);
+  if (el) el.heading = aiming.before;
+  aiming = null;
+  rebuildInspector();
+  draw();
+}
+
 canvas.addEventListener('mousedown', (ev) => {
   if (!state.meta) return;
+  // While aiming a heading, any click commits it (and starts nothing else).
+  if (aiming) { ev.preventDefault(); commitAim(); return; }
   if (isPanTrigger(ev)) {
     panning = { sx: ev.clientX, sy: ev.clientY, vx: state.view.x, vy: state.view.y };
     ev.preventDefault();
@@ -188,7 +222,13 @@ canvas.addEventListener('mousedown', (ev) => {
   if (ev.button === 2) {
     if (state.drawing && (state.tool === 'polygon' || state.tool === 'nogo')) {
       finishPoly(false);
+      return;
     }
+    // Right-click a waypoint to aim its heading with the cursor.
+    const wr = screenToWorld(ev.clientX, ev.clientY);
+    const id = hitTest(wr.wx, wr.wy);
+    const el = id && state.elements.find(e => e.id === id);
+    if (el && el.type === 'waypoint') startAim(el);
     return;
   }
   if (ev.button !== 0) return;
@@ -281,6 +321,19 @@ canvas.addEventListener('mousemove', (ev) => {
   const p = screenToPx(ev.clientX, ev.clientY);
   const w = screenToWorld(ev.clientX, ev.clientY);
   cursorPx = p;
+
+  // Aiming a heading: point the waypoint's arrow from its pose toward the cursor.
+  if (aiming) {
+    const el = state.elements.find(e => e.id === aiming.id);
+    if (el) {
+      const pos = el.coords[0] || [0, 0];
+      el.heading = Math.atan2(w.wy - pos[1], w.wx - pos[0]);   // world Y-up
+      status(`heading ${Math.round(el.heading * 180 / Math.PI)}° — click to set, Esc to cancel`);
+    }
+    canvas.style.cursor = 'crosshair';
+    draw();
+    return;
+  }
 
   // Dragging a vertex: move it live and show its world coords in the readout.
   if (nodeDrag) {
@@ -440,6 +493,7 @@ window.addEventListener('keydown', (ev) => {
     if (idx >= 0 && idx < TOOL_ORDER.length) { ev.preventDefault(); setTool(TOOL_ORDER[idx]); return; }
   }
   if (ev.key === 'Escape') {
+    if (aiming) { cancelAim(); return; }
     if (state.refMoveMode) {
       state.refMoveMode = false;
       const btn = document.querySelector('#ref-move-btn');

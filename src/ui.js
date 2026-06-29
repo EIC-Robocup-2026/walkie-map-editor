@@ -406,7 +406,7 @@ export function rebuildInspector() {
   const pos = document.createElement('div');
   pos.className = 'muted';
   const c = el.coords[0] || [0, 0];
-  pos.textContent = `pos: ${(+c[0]).toFixed(3)}, ${(+c[1]).toFixed(3)} m · re-aim by re-drawing with the Waypoint tool`;
+  pos.textContent = `pos: ${(+c[0]).toFixed(3)}, ${(+c[1]).toFixed(3)} m · right-click the waypoint to aim its heading`;
   root.appendChild(pos);
 }
 

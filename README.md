@@ -127,7 +127,11 @@ sidebar list) and fill the **Waypoint** inspector in the sidebar:
   *this* door only inside this circle. Blank = the robot's global default
   (`WALKIE_DOOR_NEAR_RADIUS_M`, 1.5 m). The dashed ring previews it.
 
-Re-aim a committed waypoint by re-drawing it with the Waypoint (or Door) tool.
+Re-aim a committed waypoint by **right-clicking it**: the heading follows the
+cursor, a click sets it, `Esc` cancels. (Works for any waypoint, including the
+room/location places created by drawing an area/object, which start at heading 0.)
+You can also re-draw it with the Waypoint (or Door) tool, or type the angle in the
+inspector.
 
 > **Door vs. `barrier`.** A `door` is a geographic point — the robot engages its
 > open-the-door routine when it's near one, on any route. The `barrier` flag on a

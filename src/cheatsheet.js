@@ -10,7 +10,7 @@ const MOUSE_HINTS = [
   ['Mouse wheel', 'zoom at cursor'],
   ['Middle / Alt / Ctrl + drag', 'pan'],
   ['Polygon / No-Go', 'click vertices, click near start to close'],
-  ['Right-click', 'finish polygon'],
+  ['Right-click', 'finish polygon · aim a waypoint heading (click to set, Esc to cancel)'],
   ['Select + drag a node handle', 'move that vertex'],
   ['Select + drag the body', 'move the whole element'],
   ['Double-click a list item', 'rename its label'],

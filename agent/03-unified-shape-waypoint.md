@@ -72,6 +72,19 @@ centre. Forced for area (→ room), optional for object (→ location).
   draw time); re-draw to change the boundary. Documented in the README.
 - Two objects with the same label auto-suffix (`table_2`); rename freely in the inspector.
 
+## Follow-up (same branch): right-click heading aim
+
+Added on request — the unified area/object waypoints start at heading 0, so a quick
+way to set heading was needed:
+
+- **Right-click a waypoint** (including by clicking inside a room/footprint polygon)
+  enters aim mode; the arrow follows the cursor (`heading = atan2(cursor − pose)`).
+- **Any click** commits as one undoable `elem-mod`; **Esc** cancels (restores the
+  original heading). Live angle shown in the status bar.
+- Implemented in `input.js` (`aiming` state + `startAim`/`commitAim`/`cancelAim`,
+  hooked into mousedown/mousemove/keydown). Inspector hint, in-app Help, cheat-sheet,
+  and README updated.
+
 ## Not in this feature (later branches)
 
 - Z height + full field editing in the properties panel (Feature 4).
