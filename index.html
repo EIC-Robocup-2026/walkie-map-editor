@@ -21,6 +21,7 @@
     <symbol id="ic-polygon" viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></symbol>
     <symbol id="ic-nogo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></symbol>
     <symbol id="ic-waypoint" viewBox="0 0 24 24"><path d="M12 22s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="ic-door" viewBox="0 0 24 24"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17"/><path d="M4 21h16"/><circle cx="13" cy="12" r="1" fill="currentColor" stroke="none"/></symbol>
     <symbol id="ic-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="ic-undo" viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/></symbol>
     <symbol id="ic-redo" viewBox="0 0 24 24"><path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0 0 10h1"/></symbol>
@@ -62,6 +63,7 @@
 
   <div class="grp" data-group="map">
     <button data-tool="waypoint" aria-label="Waypoint" title="Waypoint — place a named room/location for world.toml; drag to set the robot's heading"><svg class="ic"><use href="#ic-waypoint"/></svg></button>
+    <button data-tool="door" aria-label="Door" title="Door — mark a physical door for world.toml [doors]; click to place, drag to aim the passage. Dashed ring = where the robot asks to open it"><svg class="ic"><use href="#ic-door"/></svg></button>
   </div>
 
   <div class="grp">

@@ -45,6 +45,19 @@ export function runSelfCheck() {
   console.assert(/\[gestures\.waving\]/.test(toml), 'gestures table');
   console.assert(canon('the Kitchen Table') === 'the_kitchen_table', 'canon');
 
+  // doors -> [doors.*]; radius emitted only when set
+  const wpDoor = { type: 'waypoint', role: 'door', name: 'Entrance Door', heading: 0,
+    coords: [[2.0, 1.0]], radius: 1.2, present: true };
+  const wpDoorNoR = { type: 'waypoint', role: 'door', name: 'side', heading: 0, coords: [[0, 0]], present: true };
+  const tomlD = buildWorldTomlFrom([wpDoor, wpDoorNoR], {});
+  console.assert(/\[doors\.entrance_door\]/.test(tomlD), 'doors table snake_cased');
+  console.assert(/\[doors\.entrance_door\]\npose = \[2\.0, 1\.0, 0\.0\]\nradius = 1\.2/.test(tomlD), 'door pose + radius, got:\n' + tomlD);
+  console.assert(/\[doors\.side\]\npose = \[0\.0, 0\.0, 0\.0\]\n/.test(tomlD) && !/\[doors\.side\][\s\S]*radius/.test(tomlD), 'no radius line when unset');
+  const dupDoors = [
+    { type: 'waypoint', role: 'door', name: 'Front', coords: [[0, 0]], heading: 0, present: true },
+    { type: 'waypoint', role: 'door', name: 'front', coords: [[1, 1]], heading: 0, present: true }];
+  console.assert(worldIssuesFrom(dupDoors, {}).errors.length === 1, 'colliding door names -> error');
+
   // vocab editor helpers
   console.assert(splitList('cola, water ,  milk ').length === 3, 'splitList trims + drops blanks');
   console.assert(splitList('').length === 0, 'splitList empty');

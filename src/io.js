@@ -152,17 +152,19 @@ export function normalizeElement(e) {
 }
 
 // Semantic fields a waypoint carries on top of its position, for world.toml.
-// role '' = not exported; 'room'/'location' map to [rooms.*]/[locations.*].
+// role '' = not exported; 'room'/'location'/'door' map to [rooms.*]/[locations.*]/[doors.*].
 export function defaultWaypointFields(e = {}) {
   return {
     heading: Number.isFinite(+e.heading) ? +e.heading : 0,   // radians, map frame
-    role: e.role === 'room' || e.role === 'location' ? e.role : '',
+    role: ['room', 'location', 'door'].includes(e.role) ? e.role : '',
     name: typeof e.name === 'string' ? e.name : '',
     room: typeof e.room === 'string' ? e.room : '',           // location -> its room (canonical)
     category: typeof e.category === 'string' ? e.category : '',
     aliases: Array.isArray(e.aliases) ? e.aliases.map(String) : [],
     placement: !!e.placement,
     barrier: !!e.barrier,
+    // door-only: proximity trigger radius (m). null -> robot uses its global default.
+    radius: e.radius == null || e.radius === '' ? null : (Number.isFinite(+e.radius) ? +e.radius : null),
     present: e.present === undefined ? true : !!e.present,
   };
 }
