@@ -377,6 +377,33 @@ export function updateInfo() {
     d.appendChild(b);
     info.appendChild(d);
   }
+  // Show 3D ref panel and dim the toggle when no ref is loaded
+  const refPanel = $('#ref-panel');
+  if (refPanel) {
+    refPanel.style.display = state.refMeta ? '' : 'none';
+    if (state.refMeta) {
+      const rm = state.refMeta;
+      const [z0, z1] = rm.z_range || [0, 0];
+      $('#ref-info-text').textContent =
+        `${rm.width}×${rm.height}px · ${rm.resolution}m/px · z:[${z0.toFixed(2)}, ${z1.toFixed(2)}]m`;
+      const slider = $('#ref-opacity');
+      if (slider) slider.value = state.refOpacity;
+      const valSpan = $('#ref-opacity-val');
+      if (valSpan) valSpan.textContent = `${Math.round(state.refOpacity * 100)}%`;
+      const scaleEl = $('#ref-scale');
+      if (scaleEl) scaleEl.value = state.refUserScale;
+      const scaleVal = $('#ref-scale-val');
+      if (scaleVal) scaleVal.textContent = `${state.refUserScale.toFixed(2)}×`;
+      const ox = $('#ref-offset-x'), oy = $('#ref-offset-y');
+      if (ox) ox.value = Math.round(state.refOffsetX);
+      if (oy) oy.value = Math.round(state.refOffsetY);
+      const zminEl = $('#ref-zmin'), zmaxEl = $('#ref-zmax');
+      if (zminEl) zminEl.value = isFinite(state.refZMin) ? state.refZMin.toFixed(2) : '';
+      if (zmaxEl) zmaxEl.value = isFinite(state.refZMax) ? state.refZMax.toFixed(2) : '';
+    }
+    const wrap = $('#toggle-ref-wrap');
+    if (wrap) wrap.style.opacity = state.refImage ? '' : '0.4';
+  }
 }
 
 export function status(t) { $('#status').textContent = t; }

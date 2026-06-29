@@ -16,6 +16,8 @@ import { openCheatsheet, isCheatsheetOpen } from './cheatsheet.js';
 export let cursorPx = null;
 let panning = null;
 let painting = false;
+// Drag state for the 3D ref overlay move mode.
+let refDrag = null;
 // Active vertex drag: { id, index, before } where `before` is a deep copy of the
 // element's coords at grab time, so the whole move commits as one undo step.
 let nodeDrag = null;
@@ -117,6 +119,13 @@ canvas.addEventListener('mousedown', (ev) => {
     ev.preventDefault();
     return;
   }
+  // Ref overlay drag mode: left-button drag moves the overlay.
+  if (state.refMoveMode && state.showRefOverlay && ev.button === 0) {
+    refDrag = { sx: ev.clientX, sy: ev.clientY, ox: state.refOffsetX, oy: state.refOffsetY };
+    canvas.style.cursor = 'grabbing';
+    ev.preventDefault();
+    return;
+  }
   if (ev.button === 2) {
     if (state.drawing && (state.tool === 'polygon' || state.tool === 'nogo')) {
       finishPoly(false);
@@ -195,6 +204,16 @@ canvas.addEventListener('mousemove', (ev) => {
     draw();
     return;
   }
+  if (refDrag) {
+    state.refOffsetX = refDrag.ox + (ev.clientX - refDrag.sx) / state.view.s;
+    state.refOffsetY = refDrag.oy + (ev.clientY - refDrag.sy) / state.view.s;
+    const ix = document.querySelector('#ref-offset-x');
+    const iy = document.querySelector('#ref-offset-y');
+    if (ix) ix.value = Math.round(state.refOffsetX);
+    if (iy) iy.value = Math.round(state.refOffsetY);
+    draw();
+    return;
+  }
   const p = screenToPx(ev.clientX, ev.clientY);
   const w = screenToWorld(ev.clientX, ev.clientY);
   cursorPx = p;
@@ -228,6 +247,11 @@ canvas.addEventListener('mousemove', (ev) => {
   if (selEl) status(selReadout(selEl, nodeAt(selEl, p)));
   else status(`world (${w.wx.toFixed(3)}, ${w.wy.toFixed(3)}) m   px (${Math.floor(p.px)}, ${Math.floor(p.py)})   tool: ${state.tool}`);
 
+  if (state.refMoveMode && state.showRefOverlay) {
+    canvas.style.cursor = 'move';
+    draw();
+    return;
+  }
   // Cursor affordance hint (Select tool): grab over a node handle of the selected
   // element, move over any element body, plain arrow otherwise.
   if (state.tool === 'select') {
@@ -252,6 +276,11 @@ canvas.addEventListener('mousemove', (ev) => {
 
 canvas.addEventListener('mouseup', (ev) => {
   if (panning) { panning = null; return; }
+  if (refDrag) {
+    refDrag = null;
+    canvas.style.cursor = state.refMoveMode ? 'move' : 'default';
+    return;
+  }
   if (nodeDrag) {
     const el = state.elements.find(e => e.id === nodeDrag.id);
     if (el) {
@@ -347,6 +376,13 @@ window.addEventListener('keydown', (ev) => {
     if (idx >= 0 && idx < TOOL_ORDER.length) { ev.preventDefault(); setTool(TOOL_ORDER[idx]); return; }
   }
   if (ev.key === 'Escape') {
+    if (state.refMoveMode) {
+      state.refMoveMode = false;
+      const btn = document.querySelector('#ref-move-btn');
+      if (btn) btn.classList.remove('active');
+      canvas.style.cursor = 'default';
+      return;
+    }
     if (state.drawing) {
       if (state.drawing.type === 'rect' || state.drawing.type === 'waypoint') { state.drawing = null; draw(); }
       else finishPoly(false);

@@ -55,6 +55,19 @@ export const state = {
   showIds: true,
   // Overlay the pristine _og.pgm at 60% opacity (Khemin's request) to see edits.
   showOriginalOverlay: false,
+  // 3D OctoMap reference overlay (loaded from *_3dref.png + *_3dref.json).
+  // refImage is an ImageBitmap; refMeta = { origin, resolution, width, height, z_range }.
+  refImage: null,
+  refMeta: null,
+  showRefOverlay: false,
+  refOpacity: 1.0,
+  refOffsetX: 0,
+  refOffsetY: 0,
+  refUserScale: 1.0,
+  refMoveMode: false,
+  refVoxels: null,   // raw { resolution, xs, ys, zs } kept for Z-range re-filtering
+  refZMin: -Infinity,
+  refZMax: Infinity,
   // UI navigation: hovered element (list↔canvas highlight), sidebar collapse,
   // element-list search filter, and a transient drag-over flag for the drop zone.
   hoverId: null,

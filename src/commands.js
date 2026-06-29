@@ -52,6 +52,11 @@ export function getCommands() {
       run: () => toggle('#toggle-ids', 'showIds') },
     { id: 'view.orig', category: 'View', title: `${state.showOriginalOverlay ? 'Hide' : 'Show'} original-map overlay`, keys: [],
       run: () => toggle('#toggle-orig', 'showOriginalOverlay') },
+    { id: 'view.ref', category: 'View', title: `${state.showRefOverlay ? 'Hide' : 'Show'} 3D reference overlay`, keys: [],
+      run: () => {
+        if (!state.refImage) { document.querySelector('#status').textContent = 'No 3D ref loaded — need *_3dref.png + *_3dref.json'; return; }
+        toggle('#toggle-ref', 'showRefOverlay');
+      } },
     { id: 'view.sidebar', category: 'View', title: `${state.sidebarCollapsed ? 'Show' : 'Hide'} sidebar`, keys: ['Ctrl+B'],
       run: toggleSidebar },
   );
