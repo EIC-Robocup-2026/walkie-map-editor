@@ -234,29 +234,39 @@ Laundry / PickAndPlace) and `tasks/GPSR/world.py` (+ object categories / names
 > location-based challenges but leaves **GPSR reading the stale old map**.
 > Treat `WALKIE_MAP_FILE` as a 4-challenge-only override.
 
+Output follows the **`world.rulebook_2026.toml`** structure: one `[rooms]` /
+`[locations]` / `[doors]` table header, with **one inline table per entry**, and
+every place carries both a `pose` and a `polygon`.
+
 ```toml
 names = ["Charlie", "Alex"]      # person names (top-level; precedes all tables)
 
-[rooms.kitchen]
-pose = [1.20, 3.40, 1.57]        # [x_m, y_m, heading_rad], map frame (heading in RADIANS)
-aliases = ["the kitchen"]        # optional
-barrier = true                   # optional — a human-operated door/partition blocks the route
-# present = false                # optional — drop a place not in the running arena
+[rooms]
+# pose = [x_m, y_m, heading_rad] (nav approach goal); polygon = room BOUNDARY
+# ([[x,y], ...], map frame) — point-in-polygon answers "which room am I in".
+kitchen     = { pose = [1.20, 3.40, 1.57], polygon = [[0,0],[4,0],[4,3],[0,3]], aliases = ["the kitchen"], barrier = true }
+living_room = { pose = [0.50, 1.20, 0.00], polygon = [], present = false }   # present = false drops it
 
-[locations.kitchen_table]
-room = "kitchen"                 # must match a [rooms.*] key, else the location is dropped
-pose = [1.00, 2.00, 0.00]
-placement = true                 # optional — a surface you can put objects on
-category = "table"               # optional
-aliases = ["dining table"]
+[locations]
+# pose = furniture approach goal; polygon = its 2D FOOTPRINT (stamped into the costmap).
+# room must match a [rooms.*] key, else the location is cascade-dropped.
+kitchen_table = { room = "kitchen", placement = true, category = "dishes", pose = [1.0, 2.0, 0.0], polygon = [[0.6,1.6],[1.4,1.6],[1.4,2.4],[0.6,2.4]], aliases = ["dining table"] }
 
-[doors.entrance]                 # a physical door; the robot asks for it when near
-pose = [0.00, 0.00, 1.57]        # [x_m, y_m, passage_heading_rad] (heading display-only)
-radius = 1.5                     # optional — trigger radius (m); default WALKIE_DOOR_NEAR_RADIUS_M
-# present = false                # optional — drop a door not in the running arena
-
-[object_categories]
+[object_categories]              # small objects (random positions; plain name lists)
 drinks = ["cola", "water", "milk"]
+
+[object_attributes]              # reference only — not read by the loaders
+functional_types = ["tableware", "cutlery", "bag", "tray", "..."]
+query_attributes = ["color", "size", "weight", "relative_position", "description"]
+
+[doors]
+# pose = [x_m, y_m, passage_heading_rad]; polygon = optional doorway region. The door
+# skill checks "am I in the door area" by point-in-polygon and/or radius.
+entrance     = { pose = [0.0, 0.0, 1.57], polygon = [], present = false }
+kitchen_door = { pose = [2.8, 3.0, 0.0], polygon = [[2.5,2.8],[3.1,2.8],[3.1,3.2],[2.5,3.2]], radius = 1.5 }
+
+# [object_instances] — runtime cache, filled by the detector (emitted commented-out).
+# pringles.0 = { pose = [0,0,0], polygon = [], on = "cabinet" }
 
 [gestures.waving]
 aliases = ["waving person"]
@@ -264,11 +274,17 @@ aliases = ["waving person"]
 
 - Keys (room/location/category/object/gesture names) are **snake_case**;
   `names` keep their human casing.
+- `pose = [x, y, heading_rad]` is the nav **approach goal**; `polygon = [[x,y], …]`
+  is the spatial **extent** (boundary / footprint / doorway). They're
+  complementary — both are kept. Empty `polygon = []` = "not yet surveyed".
 - `heading` is **radians**, REP-103 (`0` = +x / map east, CCW positive). The
   editor stores radians; the inspector shows degrees for convenience.
 - `present = false` drops a place. `room` is optional — a location with no
   room is kept; only a location pointing at an **unknown / absent** room is
   cascade-dropped, and the pre-export check warns about that case.
+- `[object_attributes]` and `[object_instances]` are **reference-only template
+  tables** (the robot loaders ignore them); `[object_instances]` is emitted
+  commented-out as the slot the perception loop fills at runtime.
 
 ## `_element.json` format
 
@@ -286,6 +302,7 @@ aliases = ["waving person"]
 
       "// waypoint-only fields": "present when type == waypoint",
       "heading": 1.57,
+      "polygon": [[x_m, y_m], "..."],
       "role": "room | location | door | \"\"",
       "name": "kitchen_table",
       "room": "kitchen",
