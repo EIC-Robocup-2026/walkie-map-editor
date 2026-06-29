@@ -212,10 +212,11 @@ body.sidebar-collapsed #status { right: 0; }
 .type-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--type-col); flex-shrink: 0; }
 .chip-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
 .chip {
-  display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px;
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 6px;
   background: #2f2f2f; border: 1px solid #4a4a4a; border-radius: 12px; font-size: 11px;
 }
-.chip.sel { border-color: var(--type-col); background: color-mix(in oklab, var(--type-col) 18%, #2f2f2f); color: #fff; }
+.chip.sel { border-color: var(--label-col); background: color-mix(in oklab, var(--label-col) 20%, #2f2f2f); color: #fff; }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--label-col); flex-shrink: 0; }
 .chip-t { cursor: pointer; }
 .chip-x { background: none; border: none; color: #999; padding: 0 2px; font-size: 13px; line-height: 1; }
 .chip-x:hover { background: none; color: #f88; }

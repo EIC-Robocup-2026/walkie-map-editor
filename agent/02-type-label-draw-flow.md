@@ -18,6 +18,14 @@ Replace the old "pick a tool, type a free label" flow with a structured
 - **Colour tag per type:** area = cyan `#22d3ee`, object = amber `#f59e0b` —
   chosen to read over both white (free) and black (occupied) map pixels. Refined
   in the colour-overhaul feature.
+- **Colour per label (added on request):** each label gets its own hue, evenly
+  spaced inside its type's hue band, so labels are distinguishable but stay in the
+  type family (area = cool cyan→blue, object = warm red→amber→yellow). The type
+  theme (`TYPE_COLORS`) stays the section/toggle accent. Implemented as
+  `labelHsl`/`colorForLabel`/`fillForLabel` in `state.js` (index-based even spread
+  with a golden-ratio hash fallback for labels not in the set — pure hashing
+  alone clustered near-identical hues). Applied on the canvas, the element-list
+  swatch, and the Draw-panel chip dots.
 
 ## What changed
 

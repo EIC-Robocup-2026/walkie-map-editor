@@ -60,8 +60,11 @@ Click **Load folder** and pick a folder containing:
   `living_room`, `kitchen_room`, `bedroom`, `laundry`; object = `table`, `shelf`,
   `chair`, `sofa`, `tv`. Custom labels persist across sessions.
 
-A drawn shape is tagged with its type (it carries the type colour on the canvas
-and a swatch in the element list). No-go zones are untyped.
+Each **label gets its own colour**, evenly spread within its type's family (area =
+cool cyan→blue, object = warm red→amber→yellow), so labels are individually
+distinguishable while still reading as their type at a glance. A drawn shape
+carries its label colour on the canvas and as a swatch in the element list; the
+chip dots in the Draw panel preview each label's colour. No-go zones are untyped.
 
 **Shape** — store coordinates in **world meters**, resolution-independent.
 

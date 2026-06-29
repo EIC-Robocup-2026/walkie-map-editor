@@ -3,7 +3,7 @@
 'use strict';
 
 import {
-  state, markDirty, LABEL_TYPES, TYPE_COLORS,
+  state, markDirty, LABEL_TYPES, TYPE_COLORS, colorForLabel,
   SUGGEST_ROOM_NAMES, SUGGEST_LOCATION_NAMES, SUGGEST_CATEGORIES,
   SUGGEST_OBJECT_CATEGORIES, SUGGEST_GESTURES, SUGGEST_DOOR_NAMES, DOOR_DEFAULT_RADIUS_M,
 } from './state.js';
@@ -34,8 +34,8 @@ export function rebuildElemList() {
     if (e.semType) {
       const sw = document.createElement('span');
       sw.className = 'type-sw';
-      sw.style.background = TYPE_COLORS[e.semType];
-      sw.title = e.semType;
+      sw.style.background = colorForLabel(e.semType, e.label);
+      sw.title = `${e.semType}: ${e.label}`;
       main.appendChild(sw);
     }
     const idTag = document.createElement('code');
@@ -210,7 +210,12 @@ export function rebuildDrawSettings() {
     for (const label of state.labelSets[type]) {
       const chip = document.createElement('span');
       const isSel = state.activeType === type && currentLabel() === label;
+      const lblCol = colorForLabel(type, label);
       chip.className = 'chip' + (isSel ? ' sel' : '');
+      // Per-label colour accent (border when selected, dot always).
+      chip.style.setProperty('--label-col', lblCol);
+      const dot = document.createElement('span'); dot.className = 'chip-dot'; dot.style.background = lblCol;
+      chip.appendChild(dot);
       const t = document.createElement('span'); t.className = 'chip-t'; t.textContent = label;
       t.onclick = () => { state.activeType = type; setActiveLabel(label); };
       chip.appendChild(t);
