@@ -257,3 +257,18 @@ body.sidebar-collapsed #status { right: 0; }
 .type-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
 .draw-wp-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); padding: 2px; cursor: pointer; }
 .draw-wp-row input { margin: 0; accent-color: var(--accent); }
+
+/* ───── Element-list navigation: group headers + counts ───────── */
+.elem-summary { margin: 0 0 4px; font-size: 11px; }
+#elem-list li.elem-group {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+  padding: 4px 4px; margin-top: 2px; border-radius: 3px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-mute);
+}
+#elem-list li.elem-group:hover { background: var(--surface-2); color: var(--text-dim); }
+.eg-caret { width: 10px; flex-shrink: 0; }
+.eg-name { flex: 1; font-weight: 600; }
+.eg-count {
+  background: var(--sunken); color: var(--text-dim); border-radius: 8px;
+  padding: 0 6px; font-size: 10px; min-width: 18px; text-align: center;
+}

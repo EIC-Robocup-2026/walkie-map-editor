@@ -143,7 +143,8 @@
           <input id="toggle-ids" type="checkbox" checked> IDs
         </label>
       </summary>
-      <input id="elem-search" class="elem-search" type="text" placeholder="filter elements… (id / label / kind)">
+      <input id="elem-search" class="elem-search" type="text" placeholder="filter elements… (id / name / kind)">
+      <div id="elem-summary" class="elem-summary muted"></div>
       <ul id="elem-list"></ul>
     </details>
 
@@ -187,6 +188,8 @@
         <li>Select tool: click an element to highlight; <b>drag a yellow node handle to move a vertex, or drag the body to move the whole shape</b> (coords show in the bar below)</li>
         <li><code>Shift</code>+<code>1…9</code>: quick-select tools (Pen, Eraser, Restore, Select, Point, Rect, Polygon, No-Go, Waypoint)</li>
         <li><b>Orig overlay</b> toolbar toggle: show the original map at 60% over your edits</li>
+        <li>Elements list is grouped (Rooms / Locations / Doors / Shapes / No-go); click a group header to collapse it</li>
+        <li><code>[</code> / <code>]</code>: select previous / next element and frame it</li>
         <li>Double-click sidebar item to rename label</li>
         <li>Sidebar <code>nogo</code> button: mask closed shape into keepout</li>
         <li>Del / Backspace: delete selected element</li>

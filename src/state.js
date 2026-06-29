@@ -122,6 +122,8 @@ export const state = {
   dirty: false,
   hiddenLabels: new Set(),
   hiddenKinds: new Set(),
+  // Element-list group sections (Rooms/Locations/…) the user has collapsed.
+  collapsedGroups: new Set(),
   showIds: true,
   // Overlay the pristine _og.pgm at 60% opacity (Khemin's request) to see edits.
   showOriginalOverlay: false,

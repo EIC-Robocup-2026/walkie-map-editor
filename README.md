@@ -191,9 +191,13 @@ These round-trip through `_element.json` so re-exporting never loses them.
   remembered across sessions.
 - **Load by drag-and-drop** — drop a map folder onto the canvas (an empty-state
   prompt shows when nothing is loaded).
-- **Elements panel** — a filter box narrows the list by id/label/kind; the **⌖**
-  button on a row zooms the view to that element; hovering a row highlights it on
-  the canvas.
+- **Elements panel** — the list is **grouped** into Rooms / Locations / Doors /
+  Waypoints / Shapes / No-go, each with a count badge and a collapsible header
+  (click it to fold that group away). A counts summary (`2 rooms · 3 locations · …`)
+  sits under the header. The filter box narrows by id/name/kind; the **⌖** button on
+  a row zooms to that element; hovering a row highlights it on the canvas.
+- **`[` / `]`** — select the previous / next element and frame it on the canvas, so
+  you can walk the arena from the keyboard.
 
 **History**
 

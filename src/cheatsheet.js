@@ -13,6 +13,7 @@ const MOUSE_HINTS = [
   ['Right-click', 'finish polygon · aim a waypoint heading (click to set, Esc to cancel)'],
   ['Select + drag a node handle', 'move that vertex'],
   ['Select + drag the body', 'move the whole element'],
+  ['[ / ]', 'select previous / next element (and frame it)'],
   ['Double-click a list item', 'rename its label'],
   ['Drop a map folder on the canvas', 'load it'],
 ];

@@ -5,7 +5,7 @@
 import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES, roleForType } from './state.js';
 import { canon, polygonCentroid, pointInPoly } from './pure.js';
 import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
-import { draw, brushRadius } from './render.js';
+import { draw, brushRadius, zoomToElement } from './render.js';
 import { addElement, deleteElement, hitTest, updateElementFields, kindOf, isVisible } from './elements.js';
 import { pushUndo, undo, redoFn } from './history.js';
 import { status, rebuildElemList, rebuildInspector, currentLabel, currentType, toggleSidebar } from './ui.js';
@@ -492,6 +492,11 @@ window.addEventListener('keydown', (ev) => {
     const idx = TOOL_SHORTCUT_CODES.indexOf(ev.code);
     if (idx >= 0 && idx < TOOL_ORDER.length) { ev.preventDefault(); setTool(TOOL_ORDER[idx]); return; }
   }
+  // [ / ] — step selection to the previous / next visible element (and frame it),
+  // so you can walk the arena without reaching for the mouse.
+  if ((ev.key === '[' || ev.key === ']') && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    ev.preventDefault(); cycleSelection(ev.key === ']' ? 1 : -1); return;
+  }
   if (ev.key === 'Escape') {
     if (aiming) { cancelAim(); return; }
     if (state.refMoveMode) {
@@ -514,6 +519,17 @@ window.addEventListener('keydown', (ev) => {
 window.addEventListener('beforeunload', (ev) => {
   if (state.dirty) { ev.preventDefault(); ev.returnValue = ''; }
 });
+
+// Move the selection to the next/prev visible element and frame it on the canvas.
+function cycleSelection(dir) {
+  const vis = state.elements.filter(isVisible);
+  if (!vis.length) return;
+  const cur = vis.findIndex(e => e.id === state.selected);
+  const idx = cur < 0 ? (dir > 0 ? 0 : vis.length - 1) : (cur + dir + vis.length) % vis.length;
+  const el = vis[idx];
+  state.selected = el.id;
+  rebuildElemList(); rebuildInspector(); zoomToElement(el);
+}
 
 function finishPoly(closed) {
   if (!state.drawing) return;
