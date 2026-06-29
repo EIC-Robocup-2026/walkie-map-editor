@@ -296,11 +296,10 @@ export function rebuildInspector() {
   if (!root) return;
   while (root.firstChild) root.removeChild(root.firstChild);
   const el = state.selected && state.elements.find(e => e.id === state.selected);
-  if (!el || el.type !== 'waypoint') {
+  if (!el) {
     const m = document.createElement('div');
     m.className = 'muted';
-    m.textContent = el ? 'Selected element is not a waypoint.'
-      : 'Select a waypoint to edit its place + heading.';
+    m.textContent = 'Select an element to edit its properties.';
     root.appendChild(m);
     return;
   }
@@ -315,12 +314,27 @@ export function rebuildInspector() {
   };
   const commit = (patch) => {
     updateElementFields(el.id, patch);
-    // Only `name` (mutates the list label + filter sets) and `role` (changes which
-    // fields render) need a full rebuild; other fields just redraw — which also
-    // keeps focus in the field being edited instead of tearing down the DOM.
+    // `name`/`role` mutate the list + which fields render → full rebuild. `label`
+    // touches the list + filters. Everything else just redraws (keeps field focus).
     if ('name' in patch || 'role' in patch) { rebuildElemList(); rebuildVisibility(); rebuildInspector(); }
+    else if ('label' in patch) { rebuildElemList(); rebuildVisibility(); }
     draw();
   };
+
+  // Non-waypoint shapes: edit the label; show kind + extent. (Waypoints below get
+  // the full place editor.)
+  if (el.type !== 'waypoint') {
+    const labelIn = document.createElement('input');
+    labelIn.type = 'text'; labelIn.value = el.label || ''; labelIn.placeholder = 'label';
+    labelIn.onchange = () => { const v = labelIn.value.trim(); if (v) commit({ label: v }); };
+    field('label', labelIn);
+    const info = document.createElement('div');
+    info.className = 'muted';
+    const c0 = el.coords[0] || [0, 0];
+    info.textContent = `${kindOf(el)}${el.asNogo ? ' +nogo' : ''} · ${el.coords.length} pt${el.coords.length === 1 ? '' : 's'} · first (${(+c0[0]).toFixed(2)}, ${(+c0[1]).toFixed(2)}) m`;
+    root.appendChild(info);
+    return;
+  }
 
   const roleSel = document.createElement('select');
   for (const [v, t] of [['', '(not exported)'], ['room', 'room'], ['location', 'location'], ['door', 'door']]) {
@@ -340,6 +354,26 @@ export function rebuildInspector() {
       : [...SUGGEST_ROOM_NAMES, ...SUGGEST_LOCATION_NAMES]);
   nameIn.onchange = () => { const nm = canon(nameIn.value); commit({ name: nm, label: nm || 'waypoint' }); };
   field('name', nameIn);
+
+  // Position X/Y (m) — the pose's map-frame coordinates (editable; also movable on
+  // the canvas by dragging the handle).
+  const c = el.coords[0] || [0, 0];
+  const posRow = document.createElement('div'); posRow.className = 'insp-row';
+  const posLbl = document.createElement('span'); posLbl.className = 'insp-lbl'; posLbl.textContent = 'position';
+  posRow.appendChild(posLbl);
+  const xIn = document.createElement('input'); xIn.type = 'number'; xIn.step = '0.05'; xIn.value = (+c[0]).toFixed(3); xIn.title = 'x (m)';
+  const yIn = document.createElement('input'); yIn.type = 'number'; yIn.step = '0.05'; yIn.value = (+c[1]).toFixed(3); yIn.title = 'y (m)';
+  function commitXY() {
+    let x = parseFloat(xIn.value), y = parseFloat(yIn.value);
+    if (!Number.isFinite(x)) x = c[0];
+    if (!Number.isFinite(y)) y = c[1];
+    commit({ coords: [[x, y]] });
+  }
+  xIn.onchange = commitXY; yIn.onchange = commitXY;
+  posRow.appendChild(xIn); posRow.appendChild(yIn);
+  const mu = document.createElement('span'); mu.className = 'muted'; mu.textContent = 'm';
+  posRow.appendChild(mu);
+  root.appendChild(posRow);
 
   if (el.role === 'location') {
     const roomSel = document.createElement('select');
@@ -363,6 +397,14 @@ export function rebuildInspector() {
     placeCb.type = 'checkbox'; placeCb.checked = !!el.placement;
     placeCb.onchange = () => commit({ placement: placeCb.checked });
     field('placement', placeCb);
+
+    // Optional Z height (m) of the object's surface — exported as `z` when set.
+    const zIn = document.createElement('input');
+    zIn.type = 'number'; zIn.step = '0.01'; zIn.min = '0';
+    zIn.value = el.z == null ? '' : el.z;
+    zIn.placeholder = 'optional';
+    zIn.onchange = () => { const v = zIn.value.trim(); commit({ z: v === '' ? null : (Number.isFinite(+v) ? +v : null) }); };
+    field('Z height m', zIn);
   }
 
   const headIn = document.createElement('input');
@@ -403,11 +445,10 @@ export function rebuildInspector() {
   presCb.onchange = () => commit({ present: presCb.checked });
   field('present', presCb);
 
-  const pos = document.createElement('div');
-  pos.className = 'muted';
-  const c = el.coords[0] || [0, 0];
-  pos.textContent = `pos: ${(+c[0]).toFixed(3)}, ${(+c[1]).toFixed(3)} m · right-click the waypoint to aim its heading`;
-  root.appendChild(pos);
+  const hint = document.createElement('div');
+  hint.className = 'muted';
+  hint.textContent = 'right-click to aim heading · drag the handle to move · or edit fields above';
+  root.appendChild(hint);
 }
 
 // ───── Arena vocabulary panel (structured row editor) ───────────────

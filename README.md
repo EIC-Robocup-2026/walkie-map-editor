@@ -106,26 +106,35 @@ A dashed rubber-band line follows the cursor while drawing.
 | Waypoint | click to place the robot's stand position, then **drag to aim its heading** (release commits) |
 | Door | mark a *physical door*: click to place, **drag to aim the passage direction**. A door is a waypoint with role pre-set to `door`; it exports to `world.toml` `[doors]` and the robot's door-opening skill engages when it's within the door's trigger radius (the dashed ring on the canvas) |
 
-A waypoint stores a full pose `(x, y, heading)`. Select it (Select tool or the
-sidebar list) and fill the **Waypoint** inspector in the sidebar:
+A waypoint stores a full pose `(x, y, heading)`. Select any element (Select tool
+or the sidebar list) and edit it in the sidebar **Properties** panel. For a
+**waypoint** every field is editable:
 
 - **role** — dropdown: `room`, `location`, `door`, or `(not exported)`. Only
-  `room`/`location`/`door` waypoints land in `world.toml` (as `[rooms.*]` /
-  `[locations.*]` / `[doors.*]`).
+  `room`/`location`/`door` waypoints land in `world.toml` (under `[rooms]` /
+  `[locations]` / `[doors]`).
 - **name** — the canonical id (auto-snake_cased, e.g. `kitchen_table`); must be
   unique. The box is a **combo**: it suggests the challenge-contract names
   (role-aware — room names vs location names) so you pick them instead of
   mistyping, but you can still type any name (GPSR arena places are arbitrary).
+- **position** — the pose's `x` / `y` in metres, editable numerically (or drag the
+  handle / type coordinates). 
 - **room** (locations only) — dropdown of your room waypoints, so the
   location→room link can never dangle.
 - **category** (locations only) — combo suggesting common categories + your
-  existing labels. **placement** / **aliases** / **barrier** / **present** —
-  see the [schema](#worldtoml--walkie-agent-v2-map).
+  existing labels.
+- **Z height m** (locations only) — optional surface height; exported as `z` in the
+  location's inline table when set, omitted otherwise.
+- **placement** / **aliases** / **barrier** / **present** — see the
+  [schema](#worldtoml--walkie-agent-v2-map).
 - **heading °** — edit the facing angle numerically (degrees) if dragging
   wasn't precise enough. (For a `door` this is the **passage °**, display-only.)
 - **radius m** (doors only) — the proximity-trigger radius: the robot asks for
   *this* door only inside this circle. Blank = the robot's global default
   (`WALKIE_DOOR_NEAR_RADIUS_M`, 1.5 m). The dashed ring previews it.
+
+For a **non-waypoint shape** the Properties panel edits its **label** and shows its
+kind + extent.
 
 Re-aim a committed waypoint by **right-clicking it**: the heading follows the
 cursor, a click sets it, `Esc` cancels. (Works for any waypoint, including the
@@ -344,6 +353,7 @@ aliases = ["waving person"]
       "name": "kitchen_table",
       "room": "kitchen",
       "category": "table",
+      "z": 0.75,
       "aliases": ["dining table"],
       "placement": true,
       "barrier": false,

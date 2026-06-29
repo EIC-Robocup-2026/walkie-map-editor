@@ -392,6 +392,8 @@ export function defaultWaypointFields(e = {}) {
     name: typeof e.name === 'string' ? e.name : '',
     room: typeof e.room === 'string' ? e.room : '',           // location -> its room (canonical)
     category: typeof e.category === 'string' ? e.category : '',
+    // Optional Z height (m) of an object/furniture surface. null = unset.
+    z: e.z == null || e.z === '' ? null : (Number.isFinite(+e.z) ? +e.z : null),
     aliases: Array.isArray(e.aliases) ? e.aliases.map(String) : [],
     placement: !!e.placement,
     barrier: !!e.barrier,
