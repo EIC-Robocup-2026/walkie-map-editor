@@ -1,0 +1,259 @@
+
+# ============================================================================
+# world.rulebook_2026.toml — the RoboCup@Home 2026 arena SUPERSET (map template)
+# ============================================================================
+#
+# Every room, furniture item, and object the *Final RoboCup@Home Rulebook 2026*
+# (Revision 2026-05-11) says CAN appear in the arena — the full vocabulary, not a
+# single surveyed arena. Use this as the starting template the walkie-map-editor /
+# teach_poses fills in, then enable the rooms/locations your arena actually has.
+#
+# Follows the world.toml schema (tasks/skills/locations.py + tasks/GPSR/world.py):
+#   pose    = [x, y, heading_rad]  in the map frame; [0,0,0] = "not yet surveyed".
+#   polygon = [[x,y], [x,y], ...]  ordered (x,y) vertices in the map frame (m) giving
+#             the 2D footprint/boundary of the thing. CCW winding, implicitly closed
+#             (the last vertex joins the first — do NOT repeat the first vertex). A
+#             simple (non-self-intersecting) polygon; [] = "not yet surveyed".
+#               • rooms     → the room BOUNDARY. point-in-polygon = "which room am I
+#                             in", and bounds the room for nav/search.
+#               • locations → the furniture's 2D FOOTPRINT, stamped as an occupied
+#                             region in the costmap (the semantic furniture layer).
+#                             For tables, trace the full tabletop outline INCLUDING
+#                             overhang so the space under the lip reads as blocked.
+#               • doors     → optional doorway region; if set, point-in-polygon can
+#                             drive the open-door ask instead of / alongside `radius`.
+#             `pose` stays the nav APPROACH goal (where to stand + which way to face);
+#             `polygon` is the spatial EXTENT. They are complementary — keep both.
+#   present = false → in the rulebook but NOT in your arena → loader drops it
+#             (parser won't ground to it, nav never drives to its [0,0,0]). A
+#             location whose room is dropped cascade-drops too.
+#   barrier = true → a human-operated door/partition blocks the route here.
+#   aliases = [...] → extra phrasings STT/the LLM may produce.
+#   category (locations only) → the object category that lives there by default
+#             (lets "the drinks" resolve to the cabinet).
+#   placement = true → objects can be put there (a surface / receptacle).
+#
+# WHY [0,0,0] / [] / present everywhere: this is the rulebook superset, NOT a
+# surveyed arena. The real poses, the polygon footprints, the actual 2 "additional
+# rooms", and the final ≥30-object list are all announced on the Setup Days
+# (rulebook §3.2.5 / §3.2.6 / §4) — only living_room + kitchen are guaranteed.
+# Survey poses + trace polygons, flip `present`, then run.
+#
+# Scope: PLACES + THINGS only — rooms, furniture, doors, objects. People (names,
+# gestures, poses) are intentionally out of this map; they live with the HRI side.
+#
+# The three mapping buckets land in three tables, plus doors:
+#   1. Rooms you can encounter ............ [rooms]              (rulebook §3.2.1 / B.1.2)
+#   2. Large furniture you can encounter .. [locations]          (rulebook §3.2.3 / B.2)
+#   3. Small objects that appear randomly . [object_categories]  (rulebook §3.2.5 / B.5)
+#      + the functional object types are documented in [object_attributes] below.
+#      + per-instance detected footprints cache in [object_instances] (runtime only).
+#   *. One door per room .................. [doors]              (rulebook §3.2.2)
+# ============================================================================
+
+
+# ============================================================================
+# 1. ROOMS  (rulebook §3.2.1 / Appendix B.1.2)
+# ----------------------------------------------------------------------------
+# Minimum arena = living_room + kitchen + ANY TWO of the "additional rooms".
+# Only living_room and kitchen are guaranteed (present = true). Pick the two
+# additional rooms your arena uses and flip them to present = true.
+#
+# polygon = room BOUNDARY (CCW, closed). Trace the walls in the map frame; this is
+# what point-in-polygon uses to answer "which room am I in" and to bound search.
+# ============================================================================
+[rooms]
+# --- guaranteed ---
+living_room    = { pose = [0,0,0], polygon = [], aliases = ["living room", "lounge", "sitting room"] }
+kitchen        = { pose = [0,0,0], polygon = [] }
+# --- "additional rooms" — enable exactly the two your arena has ---
+bedroom        = { pose = [0,0,0], polygon = [], present = false }
+office         = { pose = [0,0,0], polygon = [], aliases = ["study"], present = false }
+dining_room    = { pose = [0,0,0], polygon = [], aliases = ["dining room"], present = false }
+laundry_room   = { pose = [0,0,0], polygon = [], aliases = ["laundry room", "utility room"], present = false }
+foyer          = { pose = [0,0,0], polygon = [], aliases = ["entrance hall", "hallway", "entryway"], present = false }
+childrens_room = { pose = [0,0,0], polygon = [], aliases = ["children's room", "kids room", "nursery"], present = false }
+# bathroom isn't in the rulebook minimum but is common + already in GPSR vocab.
+bathroom       = { pose = [0,0,0], polygon = [], present = false }
+
+
+# ============================================================================
+# 2. LARGE FURNITURE / fixed locations  (rulebook §3.2.3 / Appendix B.2)
+# ----------------------------------------------------------------------------
+# Mandatory furniture (B.2 "Furnishings") is present = true *if* it sits in a
+# guaranteed room (living_room / kitchen). Mandatory items in an optional room
+# (e.g. the washing machine in a laundry area) stay present = false until you
+# enable that room — or set room = "kitchen"/etc. to match your arena.
+# Optional furniture (B.2 "Optional Furnishings") is present = false by default.
+# Furniture may be slightly moved/rotated between tests (§3.2.4) — never assume a
+# fixed pose; the map editor re-surveys (re-trace the polygon too).
+#
+# polygon = the item's 2D FOOTPRINT (CCW, closed), stamped as an occupied region in
+# the costmap by the semantic furniture layer. Trace the full ground-projected
+# outline; for tables/desks include the tabletop OVERHANG so the area under the lip
+# is treated as blocked. `placement = true` items are the ones whose tabletop you
+# usually want occupied.
+# ============================================================================
+[locations]
+
+# --- MANDATORY furniture in guaranteed rooms (active by default) ------------
+sofa          = { room = "living_room", placement = true,  pose = [0,0,0], polygon = [], aliases = ["couch"] }
+coffee_table  = { room = "living_room", placement = true,  pose = [0,0,0], polygon = [], aliases = ["coffee table", "side table"] }
+bookshelf     = { room = "living_room", placement = true,  category = "toys", pose = [0,0,0], polygon = [], aliases = ["bookcase", "bookshelf", "shelving"] }
+kitchen_table = { room = "kitchen",     placement = true,  category = "dishes", pose = [0,0,0], polygon = [], aliases = ["kitchen table", "dining table"] }  # the mandatory "small dining table + 2 chairs"; Serve-Breakfast/Clean-Table happen here (§5.2)
+dishwasher    = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [] }
+sink          = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [] }
+pantry        = { room = "kitchen",     placement = true,  category = "food", pose = [0,0,0], polygon = [], aliases = ["tall cupboard"] }
+cabinet       = { room = "kitchen",     placement = true,  category = "drinks", pose = [0,0,0], polygon = [] }  # doorless cabinet, objects grouped by category (§5.2)
+trashbin      = { room = "kitchen",     placement = false, pose = [0,0,0], polygon = [], aliases = ["trash bin", "trash can", "bin"] }
+
+# --- MANDATORY furniture that lives in an optional room ---------------------
+# Washing machine is mandatory (front-loading) but sits in the laundry area.
+# Enable laundry_room above, or set room = "kitchen" to match your arena.
+washing_machine = { room = "laundry_room", placement = false, pose = [0,0,0], polygon = [], aliases = ["washing machine", "washer"], present = false }
+folding_table   = { room = "laundry_room", placement = true,  pose = [0,0,0], polygon = [], aliases = ["folding surface"], present = false }  # the table the laundry is folded on (§5.4)
+
+# --- OPTIONAL furniture (B.2 "Optional Furnishings", recommended) -----------
+bed                 = { room = "bedroom",     placement = true,  pose = [0,0,0], polygon = [], present = false }
+bedside_table       = { room = "bedroom",     placement = true,  pose = [0,0,0], polygon = [], aliases = ["bedside table", "nightstand"], present = false }
+chest_of_drawers    = { room = "bedroom",     placement = true,  pose = [0,0,0], polygon = [], aliases = ["chest of drawers", "dresser", "drawers"], present = false }
+larger_dining_table = { room = "dining_room", placement = true,  category = "dishes", pose = [0,0,0], polygon = [], aliases = ["large dining table"], present = false }  # optional 4-chair table ("dining table" alias is on kitchen_table)
+refrigerator        = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [], aliases = ["fridge"], present = false }
+kitchen_countertop  = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [], aliases = ["countertop", "counter", "kitchen counter"], present = false }
+microwave           = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [], present = false }
+stove               = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [], aliases = ["portable stove", "cooktop", "hob"], present = false }
+cupboard            = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [], present = false }
+extra_surface       = { room = "kitchen",     placement = true,  pose = [0,0,0], polygon = [], aliases = ["extra surface"], present = false }  # fixed surface holding the worldwide-common objects (§5.2)
+tv_stand            = { room = "living_room", placement = true,  pose = [0,0,0], polygon = [], aliases = ["tv stand", "television stand", "open cupboard"], present = false }  # holds TV + remote
+side_tables         = { room = "living_room", placement = true,  category = "snacks", pose = [0,0,0], polygon = [], aliases = ["side tables", "side table"], present = false }
+armchair            = { room = "living_room", placement = false, pose = [0,0,0], polygon = [], present = false }
+coatrack            = { room = "foyer",       placement = false, pose = [0,0,0], polygon = [], aliases = ["coat rack"], present = false }
+desk                = { room = "office",      placement = true,  category = "fruits", pose = [0,0,0], polygon = [], present = false }
+storage_rack        = { room = "office",      placement = true,  pose = [0,0,0], polygon = [], aliases = ["storage rack"], present = false }
+shelf               = { room = "bathroom",    placement = true,  category = "cleaning_supplies", pose = [0,0,0], polygon = [], present = false }
+
+# --- beacons / passages (not placement surfaces) ----------------------------
+# Entrance opens inward, exit outward; the two cannot share a room (B.1.2). The
+# physical door geometry for door-opening goes in [doors] at the bottom.
+entrance = { room = "living_room", placement = false, pose = [0,0,0], polygon = [], present = false }
+exit     = { room = "kitchen",     placement = false, pose = [0,0,0], polygon = [], present = false }
+
+
+# ============================================================================
+# 3. SMALL OBJECTS that appear randomly  (rulebook §3.2.5 / Appendix B.5)
+# ----------------------------------------------------------------------------
+# The TC compiles ≥30 objects, each with a picture, official name, and Object
+# Category; the final list is announced on the Setup Days. The 7 categories below
+# are the rulebook's (drinks/snacks/food/fruits/toys/cleaning_supplies +
+# tableware&cutlery=dishes); the items are the official CompetitionTemplate set
+# the open-vocab detector grounds against (names match detector classes after
+# underscores→spaces). The four worldwide-available "common objects" (§3.2.5,
+# Fig 3.2) are folded in: red_bull, pringles, rubiks_cube, colgate_toothpaste.
+# Replace/extend with the announced objects per competition.
+#
+# NOTE on polygons: these stay plain name lists on purpose — world.py grounds
+# [object_categories] as lists, and small objects appear in RANDOM positions found
+# by the detector at run time, so they have NO survey-time (x,y)/polygon. A detected
+# instance's footprint caches in [object_instances] at the bottom (runtime only).
+# ============================================================================
+[object_categories]
+drinks            = ["juice_pack", "cola", "milk", "orange_juice", "tropical_juice", "red_wine", "iced_tea", "red_bull"]
+snacks            = ["cornflakes", "pringles", "cheezit"]
+food              = ["chocolate_jello", "coffee_grounds", "mustard", "tomato_soup", "tuna", "strawberry_jello", "spam", "sugar"]
+fruits            = ["orange", "pear", "peach", "strawberry", "apple", "lemon", "banana", "plum"]
+toys              = ["tennis_ball", "rubiks_cube", "baseball", "soccer_ball", "dice"]
+dishes            = ["cup", "mug", "bowl", "plate", "fork", "knife", "spoon", "napkin"]  # tableware + cutlery
+cleaning_supplies = ["cleanser", "sponge", "colgate_toothpaste"]
+
+
+# ============================================================================
+# OBJECT ATTRIBUTES — reference only (rulebook §3.2.5 / Appendix B.5)
+# ----------------------------------------------------------------------------
+# Not read by the loaders (world.py only grounds [object_categories]); kept here
+# so the mapping system documents the *functional* object types the rulebook
+# guarantees regardless of the announced list, plus the query attributes.
+#
+# Guaranteed functional object types (at least one of each is provided):
+#   tableware ......... dish, bowl, cup/mug, napkin
+#   cutlery ........... fork, knife, spoon
+#   bag ............... lightweight, stiff vertical handles
+#   tray .............. for bimanual (two-handed) transport
+#   pourable .......... contents can be poured (e.g. cereal box)
+#   heavy ............. 1.0–1.5 kg
+#   tiny .............. ≤5 cm (strawberry, dice, pen, teabag, paper)
+#   fragile ........... easy to break (chocolate egg)
+#   deformable ........ flexible / changes shape (cloth)
+#   laundry ........... T-shirts (for folding)
+#   laundry_basket .... wide, lightweight, two-handed carry
+#   garbage_bag ....... tieable household garbage bag
+#   common (worldwide): Red Bull can, red Pringles can, solved Rubik's cube,
+#                       Colgate toothpaste box
+#
+# Object SOURCES: Known (Consistent: Common / YCB / Local) and Similar; plus
+#   Unknown objects = arena decorations, graspable but not on the list.
+# Decorations always present (B.2): plants, mirrors, paintings, posters, picture
+#   frames, clocks, candles + holders, books.
+#
+# Queryable attributes (§3.2.5): color · relative size (smallest/largest) ·
+#   relative weight (lightest/heaviest) · relative position (left of/rightmost) ·
+#   description (is fragile / is a container / can be poured / requires two hands).
+[object_attributes]
+functional_types = ["tableware", "cutlery", "bag", "tray", "pourable", "heavy", "tiny", "fragile", "deformable", "laundry", "laundry_basket", "garbage_bag"]
+query_attributes = ["color", "size", "weight", "relative_position", "description"]
+
+
+# ============================================================================
+# DOORS — one per room  (rulebook §3.2.2: rooms connect by ≥1 door; all doors have
+# handles, can be closed, ≥90 cm wide / ≥200 cm high; entrance opens inward, exit
+# outward, and the two can't share a room).
+# ----------------------------------------------------------------------------
+# The door skill (go_to_through_door) engages only within `radius` m of a mapped
+# door, so it asks to open one exactly where there is one — not at a cabinet/wall
+# that reads "closed". A door is only real if its room is, so `present` mirrors the
+# room above. All start present = false (opt-in + safety): a door at the unsurveyed
+# pose [0,0,0] would otherwise trigger the open-door ask near the map origin. For
+# each passage your routes cross: survey its pose in walkie-map-editor, then flip
+# present = true (enable entrance + exit + the doors of your present rooms).
+#   pose    = [x, y, heading_rad]   (heading = passage direction; display-only)
+#   polygon = optional doorway region [[x,y], ...] (CCW, closed). If set, the skill
+#             can fire the open-door ask by point-in-polygon (am I in the doorway?)
+#             instead of / alongside `radius` — handy for wide or angled openings.
+#   radius  = trigger radius in m   (optional; defaults to WALKIE_DOOR_NEAR_RADIUS_M)
+# ============================================================================
+[doors]
+# --- arena entry/exit (guaranteed; opposite ends, not in the same room) ---
+entrance            = { pose = [0,0,0], polygon = [], present = false }
+exit                = { pose = [0,0,0], polygon = [], present = false }
+# --- per-room doors (enable the ones whose room is present) ---
+kitchen_door        = { pose = [0,0,0], polygon = [], present = false }
+living_room_door    = { pose = [0,0,0], polygon = [], present = false }
+bedroom_door        = { pose = [0,0,0], polygon = [], present = false }
+office_door         = { pose = [0,0,0], polygon = [], present = false }
+dining_room_door    = { pose = [0,0,0], polygon = [], present = false }
+laundry_room_door   = { pose = [0,0,0], polygon = [], present = false }
+foyer_door          = { pose = [0,0,0], polygon = [], present = false }
+childrens_room_door = { pose = [0,0,0], polygon = [], present = false }
+bathroom_door       = { pose = [0,0,0], polygon = [], present = false }
+
+
+# ============================================================================
+# OBJECT INSTANCE FOOTPRINTS — runtime only, reference (rulebook §3.2.5)
+# ----------------------------------------------------------------------------
+# Emitted LAST by walkie-map-editor (after [doors]), commented out. Small objects
+# appear in RANDOM positions (announced on the Setup Days) and are found by the
+# detector at run time, so they have NO survey-time pose/polygon in this template —
+# hardcoding an (x,y) here would be wrong. world.py does NOT read this table (same as
+# [object_attributes]); it is the documented slot for the perception loop to CACHE a
+# detected instance's footprint when you want one:
+#   <object>.<n> = { pose = [x,y,heading], polygon = [[x,y], ...], on = "<location>" }
+#     pose    = grasp/approach pose for this instance (map frame).
+#     polygon = the object's 2D outline projected to the map (from ZED depth + the
+#               YOLO/SAM mask), CCW + closed — optional, for tight collision/overlap.
+#     on      = the location (furniture) surface it was found on.
+# Populate from detection; clear between runs. Keys are <name>.<index> so several
+# instances of the same object can coexist (pringles.0, pringles.1, ...).
+#
+# Example (commented out — this is filled by the detector, not surveyed by hand):
+# [object_instances]
+# pringles.0 = { pose = [0,0,0], polygon = [], on = "cabinet" }
+# apple.0    = { pose = [0,0,0], polygon = [], on = "desk" }
