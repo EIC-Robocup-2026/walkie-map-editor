@@ -190,6 +190,17 @@ function drawElements() {
   }
 }
 
+// Stroke the current path with a dark casing under the coloured line, so elements
+// stay legible over BOTH white (free) and black (occupied) map pixels.
+function casedStroke(extra = 2.5) {
+  const col = ctx.strokeStyle, lw = ctx.lineWidth;
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = lw + extra / state.view.s;
+  ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = lw;
+  ctx.stroke();
+}
+
 function drawElement(e, selected, preview = false) {
   const nogoFill = e.type === 'nogo' || (e.asNogo && e.closed);
   const wp = e.type === 'waypoint';
@@ -218,7 +229,7 @@ function drawElement(e, selected, preview = false) {
       ctx.beginPath();
       ctx.moveTo(poly[0].px, poly[0].py);
       for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].px, poly[i].py);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.closePath(); ctx.fill(); casedStroke();
       ctx.restore();
     }
     const p = pts[0];
@@ -227,14 +238,16 @@ function drawElement(e, selected, preview = false) {
     const ey = p.py - L * Math.sin(e.heading || 0);   // world Y-up -> canvas Y-down
     ctx.fillStyle = col;
     ctx.lineWidth = (selected ? 2.5 : 1.8) / state.view.s;
-    ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(ex, ey); casedStroke(2);
     const a = Math.atan2(ey - p.py, ex - p.px), ah = 7 / state.view.s;
     ctx.beginPath();
     ctx.moveTo(ex, ey);
     ctx.lineTo(ex - ah * Math.cos(a - 0.4), ey - ah * Math.sin(a - 0.4));
     ctx.lineTo(ex - ah * Math.cos(a + 0.4), ey - ah * Math.sin(a + 0.4));
     ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1 / state.view.s; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke(); ctx.strokeStyle = col;
     ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 1 / state.view.s; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke(); ctx.strokeStyle = col;
     // Door: dashed ring at the proximity-trigger radius — where the robot's
     // door-opening skill engages (per-door radius, else the global default).
     if (e.role === 'door') {
@@ -250,13 +263,13 @@ function drawElement(e, selected, preview = false) {
   } else if (e.type === 'point') {
     const p = pts[0];
     const r = 5 / state.view.s;
-    ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2); ctx.fill(); casedStroke();
   } else if (pts.length >= 2) {
     ctx.beginPath();
     ctx.moveTo(pts[0].px, pts[0].py);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].px, pts[i].py);
     if (e.closed) { ctx.closePath(); ctx.fill(); }
-    ctx.stroke();
+    casedStroke();
     if (preview) {
       for (const p of pts) {
         ctx.beginPath(); ctx.arc(p.px, p.py, 3 / state.view.s, 0, Math.PI * 2); ctx.fill();
@@ -264,10 +277,13 @@ function drawElement(e, selected, preview = false) {
     }
   }
   if (!preview && pts.length) {
-    ctx.fillStyle = col;
     ctx.font = `${11 / state.view.s}px sans-serif`;
     const tag = state.showIds ? `#${e.id} ${e.label}` : e.label;
-    ctx.fillText(tag, pts[0].px + 5 / state.view.s, pts[0].py - 5 / state.view.s);
+    const tx = pts[0].px + 5 / state.view.s, ty = pts[0].py - 5 / state.view.s;
+    // Dark halo so the label reads over white free space and black walls alike.
+    ctx.lineWidth = 3 / state.view.s; ctx.strokeStyle = 'rgba(0,0,0,0.72)';
+    ctx.lineJoin = 'round'; ctx.strokeText(tag, tx, ty);
+    ctx.fillStyle = col; ctx.fillText(tag, tx, ty);
   }
   // Draggable node handles — drawn when this element is selected under the
   // Select tool, so the user can see and grab each vertex to move it.
