@@ -25,34 +25,40 @@ export function runSelfCheck() {
   for (const v of out) if (v === 0) blackCount++;
   console.assert(blackCount >= 4, 'raster filled, got ' + blackCount);
 
-  // world.toml builder (pure)
+  // world.toml builder (pure) — rulebook inline-table structure:
+  //   [rooms]\n kitchen = { pose = [...], polygon = [...], aliases = [...] }
   const wpRoom = { type: 'waypoint', role: 'room', name: 'Kitchen', heading: Math.PI / 2,
-    coords: [[1.2, 3.4]], aliases: ['the kitchen'], barrier: true, present: true };
+    coords: [[1.2, 3.4]], polygon: [[1, 1], [3, 1], [3, 3]], aliases: ['the kitchen'], barrier: true, present: true };
   const wpLoc = { type: 'waypoint', role: 'location', name: 'kitchen table', room: 'kitchen',
     heading: 0, coords: [[1.0, 2.0]], category: 'table', placement: true, aliases: [], present: true };
   const wpAbsent = { type: 'waypoint', role: 'room', name: 'hall', heading: 0, coords: [[0, 0]], present: false };
   const vocab = { object_categories: { drinks: ['Cola', 'water'] }, names: ['Charlie'],
     gestures: { waving: ['waving person'] } };
   const toml = buildWorldTomlFrom([wpRoom, wpLoc, wpAbsent], vocab);
-  console.assert(/\[rooms\.kitchen\]/.test(toml), 'room table');
-  console.assert(/\[locations\.kitchen_table\]/.test(toml), 'location table snake_cased');
-  console.assert(/room = "kitchen"/.test(toml), 'location->room link');
-  console.assert(/pose = \[1\.2, 3\.4, 1\.5708\]/.test(toml), 'room pose w/ heading, got:\n' + toml);
-  console.assert(/barrier = true/.test(toml), 'barrier flag');
-  console.assert(/present = false/.test(toml), 'absent room marked present=false');
+  console.assert(/\[rooms\]/.test(toml), 'rooms section header');
+  console.assert(/kitchen\s+= \{[^}]*pose = \[1\.2, 3\.4, 1\.5708\]/.test(toml), 'room inline table + pose w/ heading, got:\n' + toml);
+  console.assert(/kitchen\s+= \{[^}]*polygon = \[\[1\.0, 1\.0\], \[3\.0, 1\.0\], \[3\.0, 3\.0\]\]/.test(toml), 'room polygon coords, got:\n' + toml);
+  console.assert(/\[locations\]/.test(toml), 'locations section header');
+  console.assert(/kitchen_table\s+= \{[^}]*room = "kitchen"/.test(toml), 'location->room link, snake_cased key');
+  console.assert(/kitchen_table\s+= \{[^}]*polygon = \[\]/.test(toml), 'empty polygon -> []');
+  console.assert(/kitchen\s+= \{[^}]*barrier = true/.test(toml), 'barrier flag');
+  console.assert(/hall\s+= \{[^}]*present = false/.test(toml), 'absent room marked present=false');
   console.assert(/\[object_categories\]/.test(toml) && /drinks = \["cola", "water"\]/.test(toml), 'object categories lowercased');
+  console.assert(/\[object_attributes\]/.test(toml) && /functional_types = \["tableware"/.test(toml), 'object_attributes reference table');
+  console.assert(/# \[object_instances\]/.test(toml), 'object_instances emitted commented');
   console.assert(/names = \["Charlie"\]/.test(toml), 'names keep casing');
   console.assert(/\[gestures\.waving\]/.test(toml), 'gestures table');
   console.assert(canon('the Kitchen Table') === 'the_kitchen_table', 'canon');
 
-  // doors -> [doors.*]; radius emitted only when set
-  const wpDoor = { type: 'waypoint', role: 'door', name: 'Entrance Door', heading: 0,
-    coords: [[2.0, 1.0]], radius: 1.2, present: true };
+  // doors -> [doors] inline tables; pose carries heading_rad + polygon; radius only when set
+  const wpDoor = { type: 'waypoint', role: 'door', name: 'Entrance Door', heading: 1.5708,
+    coords: [[2.0, 1.0]], polygon: [[1.5, 0.5], [2.5, 0.5], [2.5, 1.5], [1.5, 1.5]], radius: 1.2, present: true };
   const wpDoorNoR = { type: 'waypoint', role: 'door', name: 'side', heading: 0, coords: [[0, 0]], present: true };
   const tomlD = buildWorldTomlFrom([wpDoor, wpDoorNoR], {});
-  console.assert(/\[doors\.entrance_door\]/.test(tomlD), 'doors table snake_cased');
-  console.assert(/\[doors\.entrance_door\]\npose = \[2\.0, 1\.0, 0\.0\]\nradius = 1\.2/.test(tomlD), 'door pose + radius, got:\n' + tomlD);
-  console.assert(/\[doors\.side\]\npose = \[0\.0, 0\.0, 0\.0\]\n/.test(tomlD) && !/\[doors\.side\][\s\S]*radius/.test(tomlD), 'no radius line when unset');
+  console.assert(/\[doors\]/.test(tomlD), 'doors section header');
+  console.assert(/entrance_door\s+= \{ pose = \[2\.0, 1\.0, 1\.5708\], polygon = \[\[1\.5, 0\.5\]/.test(tomlD), 'door pose w/ heading + polygon, got:\n' + tomlD);
+  console.assert(/entrance_door\s+= \{[^}]*radius = 1\.2/.test(tomlD), 'door radius when set');
+  console.assert(/side\s+= \{ pose = \[0\.0, 0\.0, 0\.0\], polygon = \[\] \}/.test(tomlD), 'no radius line when unset, got:\n' + tomlD);
   const dupDoors = [
     { type: 'waypoint', role: 'door', name: 'Front', coords: [[0, 0]], heading: 0, present: true },
     { type: 'waypoint', role: 'door', name: 'front', coords: [[1, 1]], heading: 0, present: true }];

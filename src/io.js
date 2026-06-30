@@ -378,11 +378,15 @@ export function normalizeElement(e) {
 }
 
 // Semantic fields a waypoint carries on top of its position, for world.toml.
-// role '' = not exported; 'room'/'location'/'door' map to [rooms.*]/[locations.*]/[doors.*].
+// role '' = not exported; 'room'/'location'/'door' map to an inline-table entry
+// under the [rooms]/[locations]/[doors] section (see buildWorldTomlFrom).
 export function defaultWaypointFields(e = {}) {
   return {
     heading: Number.isFinite(+e.heading) ? +e.heading : 0,   // radians, map frame
     role: ['room', 'location', 'door'].includes(e.role) ? e.role : '',
+    // polygon = room boundary / furniture footprint / doorway region (world coords,
+    // Y-up). Exported as the rulebook `polygon`; [] until a shape is bound (feat 3).
+    polygon: Array.isArray(e.polygon) ? e.polygon.map(c => [+c[0], +c[1]]) : [],
     name: typeof e.name === 'string' ? e.name : '',
     room: typeof e.room === 'string' ? e.room : '',           // location -> its room (canonical)
     category: typeof e.category === 'string' ? e.category : '',
