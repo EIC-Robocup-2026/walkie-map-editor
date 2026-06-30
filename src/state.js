@@ -69,7 +69,7 @@ export const WAYPOINT_ARROW_PX = 26;
 // Tool quick-select keybinds. TOOL_ORDER mirrors the toolbar button order so
 // Shift+1 = first tool, Shift+2 = second, … TOOL_SHORTCUT_CODES uses KeyboardEvent
 // .code (layout-independent) so Shift+1 works regardless of what "!" maps to.
-export const TOOL_ORDER = ['pen', 'eraser', 'restore', 'select', 'point', 'rect', 'polygon', 'nogo', 'waypoint', 'door', 'measure'];
+export const TOOL_ORDER = ['pen', 'eraser', 'restore', 'select', 'point', 'rect', 'polygon', 'nogo', 'waypoint', 'door'];
 export const TOOL_SHORTCUT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 export const TOOL_SHORTCUT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
 
@@ -124,9 +124,6 @@ export const state = {
   hiddenKinds: new Set(),
   // Element-list group sections (Rooms/Locations/…) the user has collapsed.
   collapsedGroups: new Set(),
-  // Ephemeral measurement (the Measure tool): { a:[wx,wy], b:[wx,wy] } in world
-  // metres, or null. Display-only — never exported.
-  measure: null,
   showIds: true,
   // Overlay the pristine _og.pgm at 60% opacity (Khemin's request) to see edits.
   showOriginalOverlay: false,

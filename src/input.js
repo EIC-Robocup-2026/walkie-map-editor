@@ -2,7 +2,7 @@
 // the canvas/window event listeners. Tool selection lives here too.
 'use strict';
 
-import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES, roleForType, DOOR_DEFAULT_RADIUS_M } from './state.js';
+import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES, roleForType } from './state.js';
 import { canon, polygonCentroid, pointInPoly } from './pure.js';
 import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
 import { draw, brushRadius, zoomToElement } from './render.js';
@@ -28,19 +28,6 @@ let bodyDrag = null;
 // Heading-aim mode: right-click a waypoint to rotate its heading with the cursor.
 // `before` is the heading at grab time (for cancel + a clean undo diff).
 let aiming = null;
-// Dragging a door's dashed radius ring to resize its trigger radius.
-let radiusDrag = null;
-// Measure tool: true while dragging out the measurement line.
-let measuring = false;
-
-// Is the screen-space point `p` near the dashed trigger-ring of door `el`?
-function nearDoorRing(el, p) {
-  if (!el || el.role !== 'door' || !el.coords[0]) return false;
-  const c = worldToPx(el.coords[0][0], el.coords[0][1]);
-  const rM = Number.isFinite(+el.radius) && +el.radius > 0 ? +el.radius : DOOR_DEFAULT_RADIUS_M;
-  const rpx = rM / state.meta.resolution;
-  return Math.abs(Math.hypot(p.px - c.px, p.py - c.py) - rpx) < 8 / state.view.s;
-}
 
 // Index of the selected element's vertex under cursor (screen-space px), or -1.
 function nodeAt(el, p) {
@@ -259,11 +246,6 @@ canvas.addEventListener('mousedown', (ev) => {
         nodeDrag = { id: sel.id, index: idx, before: sel.coords.map(c => [...c]) };
         return;
       }
-      // Grabbing the radius ring of the selected door resizes its trigger radius.
-      if (sel.type === 'waypoint' && nearDoorRing(sel, p)) {
-        radiusDrag = { id: sel.id, before: sel.radius == null ? null : sel.radius };
-        return;
-      }
     }
     const id = hitTest(w.wx, w.wy);
     state.selected = id;
@@ -315,11 +297,6 @@ canvas.addEventListener('mousedown', (ev) => {
       }
     }
     draw();
-  } else if (state.tool === 'measure') {
-    // Drag out a measurement line; length shown live (display-only, not exported).
-    state.measure = { a: [w.wx, w.wy], b: [w.wx, w.wy] };
-    measuring = true;
-    draw();
   }
 });
 
@@ -354,28 +331,6 @@ canvas.addEventListener('mousemove', (ev) => {
       status(`heading ${Math.round(el.heading * 180 / Math.PI)}° — click to set, Esc to cancel`);
     }
     canvas.style.cursor = 'crosshair';
-    draw();
-    return;
-  }
-
-  // Dragging a door's radius ring: resize the trigger radius live.
-  if (radiusDrag) {
-    const el = state.elements.find(e => e.id === radiusDrag.id);
-    if (el) {
-      const c = el.coords[0];
-      el.radius = +Math.max(0.1, Math.hypot(w.wx - c[0], w.wy - c[1])).toFixed(3);
-      status(`door radius ${el.radius} m`);
-    }
-    canvas.style.cursor = 'ew-resize';
-    draw();
-    return;
-  }
-
-  // Measuring: track the line's far end and show its length.
-  if (measuring && state.measure) {
-    state.measure.b = [w.wx, w.wy];
-    const L = Math.hypot(state.measure.b[0] - state.measure.a[0], state.measure.b[1] - state.measure.a[1]);
-    status(`measure: ${L.toFixed(3)} m`);
     draw();
     return;
   }
@@ -418,7 +373,6 @@ canvas.addEventListener('mousemove', (ev) => {
   // element, move over any element body, plain arrow otherwise.
   if (state.tool === 'select') {
     canvas.style.cursor = (selEl && nodeAt(selEl, p) >= 0) ? 'grab'
-      : (selEl && nearDoorRing(selEl, p)) ? 'ew-resize'
       : hitTest(w.wx, w.wy) ? 'move' : 'default';
   }
 
@@ -430,16 +384,8 @@ canvas.addEventListener('mousemove', (ev) => {
       state.drawing.coords = [[ax, ay], [w.wx, ay], [w.wx, w.wy], [ax, w.wy]];
     } else if (state.drawing.type === 'waypoint') {
       const [ax, ay] = state.drawing.coords[0];
-      const dx = w.wx - ax, dy = w.wy - ay, dist = Math.hypot(dx, dy);
-      if (dist > 2 * state.meta.resolution) {
-        state.drawing.heading = Math.atan2(dy, dx);
-        // For a door, the drag distance also sets the trigger radius (press-and-hold
-        // to scale the ring while aiming the passage).
-        if (state.drawing.role === 'door') {
-          state.drawing.radius = +dist.toFixed(3);
-          status(`door: ${Math.round(state.drawing.heading * 180 / Math.PI)}° · radius ${state.drawing.radius} m`);
-        }
-      }
+      const dx = w.wx - ax, dy = w.wy - ay;
+      if (Math.hypot(dx, dy) > 2 * state.meta.resolution) state.drawing.heading = Math.atan2(dy, dx);
     }
   }
   draw();
@@ -452,19 +398,6 @@ canvas.addEventListener('mouseup', (ev) => {
     canvas.style.cursor = state.refMoveMode ? 'move' : 'default';
     return;
   }
-  if (radiusDrag) {
-    const el = state.elements.find(e => e.id === radiusDrag.id);
-    if (el) {
-      const final = el.radius;
-      el.radius = radiusDrag.before;                         // restore for a clean undo diff
-      updateElementFields(el.id, { radius: final });          // one undoable elem-mod
-      rebuildInspector();
-    }
-    radiusDrag = null;
-    draw();
-    return;
-  }
-  if (measuring) { measuring = false; return; }   // keep the line shown until Esc / next measure
   if (nodeDrag) {
     const el = state.elements.find(e => e.id === nodeDrag.id);
     if (el) {
@@ -566,7 +499,6 @@ window.addEventListener('keydown', (ev) => {
   }
   if (ev.key === 'Escape') {
     if (aiming) { cancelAim(); return; }
-    if (state.measure) { state.measure = null; measuring = false; draw(); return; }
     if (state.refMoveMode) {
       state.refMoveMode = false;
       const btn = document.querySelector('#ref-move-btn');
@@ -612,7 +544,6 @@ function finishPoly(closed) {
 export function setTool(t) {
   state.tool = t;
   state.drawing = null;
-  measuring = false;
   document.querySelectorAll('button[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
   canvas.style.cursor = ({ select: 'pointer', point: 'crosshair', rect: 'crosshair',
     polygon: 'crosshair', nogo: 'crosshair', pen: 'none', eraser: 'none', restore: 'none' }[t]) || 'crosshair';
