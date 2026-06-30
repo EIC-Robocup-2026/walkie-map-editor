@@ -77,6 +77,7 @@ export function draw() {
   drawGrid();
   drawOrigin();
   drawElements();
+  drawMeasure();
   drawCursor();
   ctx.restore();
 
@@ -178,12 +179,18 @@ function drawElements() {
       const last = state.drawing.coords[state.drawing.coords.length - 1];
       const lp = worldToPx(last[0], last[1]);
       ctx.save();
-      ctx.setLineDash([4 / state.view.s, 4 / state.view.s]);
-      ctx.strokeStyle = state.drawing.type === 'nogo' ? '#ff4444' : '#ffeb3b';
-      ctx.lineWidth = 1 / state.view.s;
       ctx.beginPath();
       ctx.moveTo(lp.px, lp.py);
       ctx.lineTo(cursorPx.px, cursorPx.py);
+      // Solid dark underlay fills the dash gaps so the rubber-band line stays
+      // visible over white free space; bright dashes ride on top.
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 3 / state.view.s;
+      ctx.stroke();
+      ctx.setLineDash([5 / state.view.s, 4 / state.view.s]);
+      ctx.strokeStyle = state.drawing.type === 'nogo' ? '#ff5555' : '#ffea00';
+      ctx.lineWidth = 1.8 / state.view.s;
       ctx.stroke();
       ctx.restore();
     }
@@ -199,6 +206,29 @@ function casedStroke(extra = 2.5) {
   ctx.stroke();
   ctx.strokeStyle = col; ctx.lineWidth = lw;
   ctx.stroke();
+}
+
+// Haloed world-space label (drawn inside the zoom transform; size compensated).
+function worldText(text, x, y, col) {
+  ctx.font = `${11 / state.view.s}px sans-serif`;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 3 / state.view.s; ctx.strokeStyle = 'rgba(0,0,0,0.72)';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = col; ctx.fillText(text, x, y);
+}
+
+// Measure tool overlay: a gold line with endpoint ticks + its length in metres.
+function drawMeasure() {
+  const m = state.measure;
+  if (!m || !m.a || !m.b) return;
+  const a = worldToPx(m.a[0], m.a[1]), b = worldToPx(m.b[0], m.b[1]);
+  const gold = '#ffd54a';
+  ctx.strokeStyle = gold; ctx.lineWidth = 1.6 / state.view.s;
+  ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); casedStroke(2);
+  ctx.fillStyle = gold;
+  for (const p of [a, b]) { ctx.beginPath(); ctx.arc(p.px, p.py, 3 / state.view.s, 0, Math.PI * 2); ctx.fill(); }
+  const len = Math.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1]);
+  worldText(`${len.toFixed(2)} m`, (a.px + b.px) / 2 + 6 / state.view.s, (a.py + b.py) / 2 - 6 / state.view.s, gold);
 }
 
 function drawElement(e, selected, preview = false) {

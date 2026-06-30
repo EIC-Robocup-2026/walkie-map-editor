@@ -14,79 +14,132 @@ import { draw, zoomToElement } from './render.js';
 
 // ───── Element list ─────────────────────────────────────────────────
 
+// Navigation grouping: a populated arena reads as Rooms / Locations / Doors /
+// Waypoints / Shapes / No-go sections instead of one flat list.
+function groupOf(e) {
+  if (e.type === 'waypoint') {
+    return e.role === 'room' ? 'Rooms' : e.role === 'location' ? 'Locations'
+      : e.role === 'door' ? 'Doors' : 'Waypoints';
+  }
+  if (e.type === 'nogo' || e.asNogo) return 'No-go';
+  return 'Shapes';
+}
+const GROUP_ORDER = ['Rooms', 'Locations', 'Doors', 'Waypoints', 'Shapes', 'No-go'];
+
+// Build one element row (the <li>); extracted so the grouped list can stamp many.
+function buildElemRow(e) {
+  const li = document.createElement('li');
+  if (state.selected === e.id) li.className = 'sel';
+  if (!isVisible(e)) li.classList.add('hidden');
+  li.onmouseenter = () => { state.hoverId = e.id; draw(); };
+  li.onmouseleave = () => { if (state.hoverId === e.id) { state.hoverId = null; draw(); } };
+
+  const main = document.createElement('span');
+  main.className = 'main';
+  if (e.semType) {
+    const sw = document.createElement('span');
+    sw.className = 'type-sw';
+    sw.style.background = colorForLabel(e.semType, e.label);
+    sw.title = `${e.semType}: ${e.label}`;
+    main.appendChild(sw);
+  }
+  const idTag = document.createElement('code');
+  idTag.className = 'eid';
+  idTag.textContent = '#' + e.id;
+  main.appendChild(idTag);
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = ' ' + e.label + ' ';
+  main.appendChild(labelSpan);
+  const em = document.createElement('em');
+  em.textContent = kindOf(e) + (e.asNogo ? '+nogo' : '');
+  main.appendChild(em);
+
+  const actions = document.createElement('span');
+  actions.className = 'acts';
+  if (e.closed && e.type !== 'nogo') {
+    const nogoBtn = document.createElement('button');
+    nogoBtn.className = 'mini';
+    nogoBtn.textContent = e.asNogo ? 'nogo✓' : 'nogo';
+    nogoBtn.title = 'mask this shape into _keepout.pgm';
+    nogoBtn.onclick = (ev) => { ev.stopPropagation(); toggleAsNogo(e.id); };
+    actions.appendChild(nogoBtn);
+  }
+  const zoomBtn = document.createElement('button');
+  zoomBtn.className = 'mini'; zoomBtn.textContent = '⌖'; zoomBtn.title = 'zoom to element';
+  zoomBtn.onclick = (ev) => { ev.stopPropagation(); state.selected = e.id; rebuildElemList(); rebuildInspector(); zoomToElement(e); };
+  actions.appendChild(zoomBtn);
+  const x = document.createElement('span');
+  x.className = 'x'; x.textContent = '×';
+  actions.appendChild(x);
+
+  li.appendChild(main); li.appendChild(actions);
+  li.onclick = (ev) => { if (ev.target.closest('.acts')) return; state.selected = e.id; rebuildElemList(); rebuildInspector(); draw(); };
+  // Waypoints are renamed via the inspector (their label mirrors `name`), so the
+  // dblclick label-editor is wired only for the drawing kinds it actually owns —
+  // otherwise its blur would no-op in renameElement and strand the input in the DOM.
+  if (e.type !== 'waypoint') li.ondblclick = (ev) => {
+    if (ev.target.closest('.acts')) return;
+    const input = document.createElement('input');
+    input.value = e.label; input.size = 12;
+    input.onclick = (e2) => e2.stopPropagation();
+    input.onkeydown = (e2) => { if (e2.key === 'Enter') input.blur(); if (e2.key === 'Escape') { input.value = e.label; input.blur(); } };
+    input.onblur = () => renameElement(e.id, input.value.trim());
+    li.replaceChild(input, main);
+    input.focus(); input.select();
+  };
+  x.onclick = (ev) => { ev.stopPropagation(); deleteElement(e.id); };
+  return li;
+}
+
 export function rebuildElemList() {
   const ul = $('#elem-list');
   while (ul.firstChild) ul.removeChild(ul.firstChild);
   const q = (state.elemFilter || '').toLowerCase().trim();
-  let shown = 0;
-  for (const e of state.elements) {
-    if (q && !(`#${e.id} ${e.label} ${kindOf(e)}`).toLowerCase().includes(q)) continue;
-    shown++;
-    const li = document.createElement('li');
-    if (state.selected === e.id) li.className = 'sel';
-    if (!isVisible(e)) li.classList.add('hidden');
-    // Hover a row to highlight the matching element on the canvas.
-    li.onmouseenter = () => { state.hoverId = e.id; draw(); };
-    li.onmouseleave = () => { if (state.hoverId === e.id) { state.hoverId = null; draw(); } };
+  const matches = state.elements.filter(e =>
+    !q || (`#${e.id} ${e.label} ${e.name || ''} ${kindOf(e)} ${groupOf(e)}`).toLowerCase().includes(q));
 
-    const main = document.createElement('span');
-    main.className = 'main';
-    if (e.semType) {
-      const sw = document.createElement('span');
-      sw.className = 'type-sw';
-      sw.style.background = colorForLabel(e.semType, e.label);
-      sw.title = `${e.semType}: ${e.label}`;
-      main.appendChild(sw);
-    }
-    const idTag = document.createElement('code');
-    idTag.className = 'eid';
-    idTag.textContent = '#' + e.id;
-    main.appendChild(idTag);
-    const labelSpan = document.createElement('span');
-    labelSpan.textContent = ' ' + e.label + ' ';
-    main.appendChild(labelSpan);
-    const em = document.createElement('em');
-    em.textContent = kindOf(e) + (e.asNogo ? '+nogo' : '');
-    main.appendChild(em);
-
-    const actions = document.createElement('span');
-    actions.className = 'acts';
-    if (e.closed && e.type !== 'nogo') {
-      const nogoBtn = document.createElement('button');
-      nogoBtn.className = 'mini';
-      nogoBtn.textContent = e.asNogo ? 'nogo✓' : 'nogo';
-      nogoBtn.title = 'mask this shape into _keepout.pgm';
-      nogoBtn.onclick = (ev) => { ev.stopPropagation(); toggleAsNogo(e.id); };
-      actions.appendChild(nogoBtn);
-    }
-    const zoomBtn = document.createElement('button');
-    zoomBtn.className = 'mini'; zoomBtn.textContent = '⌖'; zoomBtn.title = 'zoom to element';
-    zoomBtn.onclick = (ev) => { ev.stopPropagation(); state.selected = e.id; rebuildElemList(); rebuildInspector(); zoomToElement(e); };
-    actions.appendChild(zoomBtn);
-    const x = document.createElement('span');
-    x.className = 'x'; x.textContent = '×';
-    actions.appendChild(x);
-
-    li.appendChild(main); li.appendChild(actions);
-
-    li.onclick = (ev) => { if (ev.target.closest('.acts')) return; state.selected = e.id; rebuildElemList(); rebuildInspector(); draw(); };
-    // Waypoints are renamed via the inspector (their label mirrors `name`), so the
-    // dblclick label-editor is wired only for the drawing kinds it actually owns —
-    // otherwise its blur would no-op in renameElement and strand the input in the DOM.
-    if (e.type !== 'waypoint') li.ondblclick = (ev) => {
-      if (ev.target.closest('.acts')) return;
-      const input = document.createElement('input');
-      input.value = e.label; input.size = 12;
-      input.onclick = (e2) => e2.stopPropagation();
-      input.onkeydown = (e2) => { if (e2.key === 'Enter') input.blur(); if (e2.key === 'Escape') { input.value = e.label; input.blur(); } };
-      input.onblur = () => renameElement(e.id, input.value.trim());
-      li.replaceChild(input, main);
-      input.focus(); input.select();
-    };
-    x.onclick = (ev) => { ev.stopPropagation(); deleteElement(e.id); };
-    ul.appendChild(li);
+  // Bucket into groups, preserving element order within each.
+  const groups = new Map();
+  for (const e of matches) {
+    const g = groupOf(e);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(e);
   }
-  $('#elem-count').textContent = q ? `${shown}/${state.elements.length}` : state.elements.length;
+  for (const g of GROUP_ORDER) {
+    const items = groups.get(g);
+    if (!items || !items.length) continue;
+    const collapsed = state.collapsedGroups.has(g);
+    const head = document.createElement('li');
+    head.className = 'elem-group' + (collapsed ? ' collapsed' : '');
+    const caret = document.createElement('span'); caret.className = 'eg-caret'; caret.textContent = collapsed ? '▸' : '▾';
+    const name = document.createElement('span'); name.className = 'eg-name'; name.textContent = g;
+    const cnt = document.createElement('span'); cnt.className = 'eg-count'; cnt.textContent = items.length;
+    head.appendChild(caret); head.appendChild(name); head.appendChild(cnt);
+    head.onclick = () => {
+      if (collapsed) state.collapsedGroups.delete(g); else state.collapsedGroups.add(g);
+      rebuildElemList();
+    };
+    ul.appendChild(head);
+    if (collapsed) continue;
+    for (const e of items) ul.appendChild(buildElemRow(e));
+  }
+
+  $('#elem-count').textContent = q ? `${matches.length}/${state.elements.length}` : state.elements.length;
+  renderElemSummary();
+  // Keep the selected row in view as selection moves (e.g. keyboard cycling).
+  const sel = ul.querySelector('li.sel');
+  if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+
+// Compact counts breakdown under the Elements header, e.g. "3 rooms · 5 locations".
+function renderElemSummary() {
+  const root = $('#elem-summary');
+  if (!root) return;
+  const counts = new Map();
+  for (const e of state.elements) { const g = groupOf(e); counts.set(g, (counts.get(g) || 0) + 1); }
+  const parts = GROUP_ORDER.filter(g => counts.get(g)).map(g => `${counts.get(g)} ${g.toLowerCase()}`);
+  root.textContent = parts.join(' · ');
+  root.style.display = parts.length ? '' : 'none';
 }
 
 // ───── Visibility (label + kind filters) ────────────────────────────
@@ -331,7 +384,13 @@ export function rebuildInspector() {
     const info = document.createElement('div');
     info.className = 'muted';
     const c0 = el.coords[0] || [0, 0];
-    info.textContent = `${kindOf(el)}${el.asNogo ? ' +nogo' : ''} · ${el.coords.length} pt${el.coords.length === 1 ? '' : 's'} · first (${(+c0[0]).toFixed(2)}, ${(+c0[1]).toFixed(2)}) m`;
+    let dims = '';
+    if (el.coords.length >= 2) {
+      const xs = el.coords.map(c => c[0]), ys = el.coords.map(c => c[1]);
+      const wM = Math.max(...xs) - Math.min(...xs), hM = Math.max(...ys) - Math.min(...ys);
+      dims = ` · ${wM.toFixed(2)} × ${hM.toFixed(2)} m`;
+    }
+    info.textContent = `${kindOf(el)}${el.asNogo ? ' +nogo' : ''} · ${el.coords.length} pt${el.coords.length === 1 ? '' : 's'}${dims}`;
     root.appendChild(info);
     return;
   }
@@ -374,6 +433,16 @@ export function rebuildInspector() {
   const mu = document.createElement('span'); mu.className = 'muted'; mu.textContent = 'm';
   posRow.appendChild(mu);
   root.appendChild(posRow);
+
+  // Width × height of the area / footprint, from the polygon's bounding box (read-only).
+  if (Array.isArray(el.polygon) && el.polygon.length >= 2) {
+    const xs = el.polygon.map(c => c[0]), ys = el.polygon.map(c => c[1]);
+    const wM = Math.max(...xs) - Math.min(...xs), hM = Math.max(...ys) - Math.min(...ys);
+    const sizeVal = document.createElement('span');
+    sizeVal.className = 'insp-val';
+    sizeVal.textContent = `${wM.toFixed(2)} × ${hM.toFixed(2)} m`;
+    field('size', sizeVal);
+  }
 
   if (el.role === 'location') {
     const roomSel = document.createElement('select');
