@@ -88,7 +88,7 @@ boundary.
 |---|---|
 | Select | click an element to highlight it, then drag a yellow node handle to move that vertex |
 | Point | single click places one point |
-| Rect | press and drag two corners (preview shows the live bounding box + its **width × height in metres**) |
+| Rect | press and drag two corners (preview shows the live bounding box) |
 | Polygon | left-click adds vertex; click near start to close |
 | No-Go | polygon tagged as `nogo`, exported into `*_keepout.pgm` |
 
@@ -119,7 +119,9 @@ or the sidebar list) and edit it in the sidebar **Properties** panel. For a
   (role-aware — room names vs location names) so you pick them instead of
   mistyping, but you can still type any name (GPSR arena places are arbitrary).
 - **position** — the pose's `x` / `y` in metres, editable numerically (or drag the
-  handle / type coordinates). 
+  handle / type coordinates).
+- **size** — the area / footprint's **width × height in metres** (from the polygon
+  bounding box), shown for any place that has a drawn polygon.
 - **room** (locations only) — dropdown of your room waypoints, so the
   location→room link can never dangle.
 - **category** (locations only) — combo suggesting common categories + your

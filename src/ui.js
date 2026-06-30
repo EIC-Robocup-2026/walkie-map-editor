@@ -434,6 +434,16 @@ export function rebuildInspector() {
   posRow.appendChild(mu);
   root.appendChild(posRow);
 
+  // Width × height of the area / footprint, from the polygon's bounding box (read-only).
+  if (Array.isArray(el.polygon) && el.polygon.length >= 2) {
+    const xs = el.polygon.map(c => c[0]), ys = el.polygon.map(c => c[1]);
+    const wM = Math.max(...xs) - Math.min(...xs), hM = Math.max(...ys) - Math.min(...ys);
+    const sizeVal = document.createElement('span');
+    sizeVal.className = 'insp-val';
+    sizeVal.textContent = `${wM.toFixed(2)} × ${hM.toFixed(2)} m`;
+    field('size', sizeVal);
+  }
+
   if (el.role === 'location') {
     const roomSel = document.createElement('select');
     const blank = document.createElement('option'); blank.value = ''; blank.textContent = '(none)';

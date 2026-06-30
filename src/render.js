@@ -175,8 +175,6 @@ function drawElements() {
   }
   if (state.drawing) {
     drawElement(state.drawing, true, true);
-    // Live width × height of the area being drawn.
-    if (state.drawing.type !== 'waypoint' && state.drawing.coords.length >= 2) drawDimsLabel(state.drawing.coords);
     if (cursorPx && state.drawing.type !== 'rect' && state.drawing.type !== 'waypoint' && state.drawing.coords.length) {
       const last = state.drawing.coords[state.drawing.coords.length - 1];
       const lp = worldToPx(last[0], last[1]);
@@ -211,19 +209,6 @@ function worldText(text, x, y, col) {
   ctx.lineWidth = 3 / state.view.s; ctx.strokeStyle = 'rgba(0,0,0,0.72)';
   ctx.strokeText(text, x, y);
   ctx.fillStyle = col; ctx.fillText(text, x, y);
-}
-
-// "W × H m" of a drawing's bounding box, placed above its top edge.
-function drawDimsLabel(coords) {
-  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-  for (const [wx, wy] of coords) {
-    if (wx < minx) minx = wx; if (wx > maxx) maxx = wx;
-    if (wy < miny) miny = wy; if (wy > maxy) maxy = wy;
-  }
-  const wM = maxx - minx, hM = maxy - miny;
-  if (wM <= 0 && hM <= 0) return;
-  const top = worldToPx((minx + maxx) / 2, maxy);   // max world-Y = top in canvas
-  worldText(`${wM.toFixed(2)} × ${hM.toFixed(2)} m`, top.px - 20 / state.view.s, top.py - 6 / state.view.s, '#ffeb3b');
 }
 
 // Measure tool overlay: a gold line with endpoint ticks + its length in metres.

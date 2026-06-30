@@ -428,7 +428,6 @@ canvas.addEventListener('mousemove', (ev) => {
     if (state.drawing.type === 'rect') {
       const [ax, ay] = state.drawing.start;
       state.drawing.coords = [[ax, ay], [w.wx, ay], [w.wx, w.wy], [ax, w.wy]];
-      status(`area: ${Math.abs(w.wx - ax).toFixed(2)} × ${Math.abs(w.wy - ay).toFixed(2)} m`);
     } else if (state.drawing.type === 'waypoint') {
       const [ax, ay] = state.drawing.coords[0];
       const dx = w.wx - ax, dy = w.wy - ay, dist = Math.hypot(dx, dy);

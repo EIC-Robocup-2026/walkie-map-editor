@@ -272,3 +272,4 @@ body.sidebar-collapsed #status { right: 0; }
   background: var(--sunken); color: var(--text-dim); border-radius: 8px;
   padding: 0 6px; font-size: 10px; min-width: 18px; text-align: center;
 }
+.insp-val { color: var(--text); font-size: 12px; }

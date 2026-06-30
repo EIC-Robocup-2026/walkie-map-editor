@@ -5,12 +5,13 @@
 
 Three drawing-tool additions requested together.
 
-## 1. Width × height of the area being drawn
-- `render.js` `drawDimsLabel(coords)` draws `W × H m` (bounding box) above any
-  in-progress drawing (rect/polygon/no-go); shown live while dragging.
-- Status bar also reports `area: W × H m` while dragging a rect.
-- The Properties readout for a selected non-waypoint shape now includes its
-  `W × H m` extent (`ui.js`).
+## 1. Width × height in Properties (on select)
+- **Revised per review:** the first cut drew a live `W × H` label on the canvas
+  while dragging — the user wanted it in the **Properties panel on select** instead.
+  Removed the canvas label (`drawDimsLabel`) and the rect-drag status text.
+- A read-only **`size` row** (`W × H m`, from the polygon bounding box) now shows in
+  the Properties panel for any selected place that has a polygon (areas/locations),
+  and a non-waypoint shape's readout shows its extent (`ui.js`).
 
 ## 2. Door tool — radius by drag + draggable ring
 - **On placement:** dragging a door now sets BOTH the passage heading (drag
