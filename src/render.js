@@ -77,6 +77,7 @@ export function draw() {
   drawGrid();
   drawOrigin();
   drawElements();
+  drawMeasure();
   drawCursor();
   ctx.restore();
 
@@ -174,6 +175,8 @@ function drawElements() {
   }
   if (state.drawing) {
     drawElement(state.drawing, true, true);
+    // Live width × height of the area being drawn.
+    if (state.drawing.type !== 'waypoint' && state.drawing.coords.length >= 2) drawDimsLabel(state.drawing.coords);
     if (cursorPx && state.drawing.type !== 'rect' && state.drawing.type !== 'waypoint' && state.drawing.coords.length) {
       const last = state.drawing.coords[state.drawing.coords.length - 1];
       const lp = worldToPx(last[0], last[1]);
@@ -199,6 +202,42 @@ function casedStroke(extra = 2.5) {
   ctx.stroke();
   ctx.strokeStyle = col; ctx.lineWidth = lw;
   ctx.stroke();
+}
+
+// Haloed world-space label (drawn inside the zoom transform; size compensated).
+function worldText(text, x, y, col) {
+  ctx.font = `${11 / state.view.s}px sans-serif`;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 3 / state.view.s; ctx.strokeStyle = 'rgba(0,0,0,0.72)';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = col; ctx.fillText(text, x, y);
+}
+
+// "W × H m" of a drawing's bounding box, placed above its top edge.
+function drawDimsLabel(coords) {
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const [wx, wy] of coords) {
+    if (wx < minx) minx = wx; if (wx > maxx) maxx = wx;
+    if (wy < miny) miny = wy; if (wy > maxy) maxy = wy;
+  }
+  const wM = maxx - minx, hM = maxy - miny;
+  if (wM <= 0 && hM <= 0) return;
+  const top = worldToPx((minx + maxx) / 2, maxy);   // max world-Y = top in canvas
+  worldText(`${wM.toFixed(2)} × ${hM.toFixed(2)} m`, top.px - 20 / state.view.s, top.py - 6 / state.view.s, '#ffeb3b');
+}
+
+// Measure tool overlay: a gold line with endpoint ticks + its length in metres.
+function drawMeasure() {
+  const m = state.measure;
+  if (!m || !m.a || !m.b) return;
+  const a = worldToPx(m.a[0], m.a[1]), b = worldToPx(m.b[0], m.b[1]);
+  const gold = '#ffd54a';
+  ctx.strokeStyle = gold; ctx.lineWidth = 1.6 / state.view.s;
+  ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); casedStroke(2);
+  ctx.fillStyle = gold;
+  for (const p of [a, b]) { ctx.beginPath(); ctx.arc(p.px, p.py, 3 / state.view.s, 0, Math.PI * 2); ctx.fill(); }
+  const len = Math.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1]);
+  worldText(`${len.toFixed(2)} m`, (a.px + b.px) / 2 + 6 / state.view.s, (a.py + b.py) / 2 - 6 / state.view.s, gold);
 }
 
 function drawElement(e, selected, preview = false) {

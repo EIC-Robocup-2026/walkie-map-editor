@@ -15,7 +15,8 @@ import { draw, zoomToElement } from './render.js';
 
 const TOOL_TITLES = {
   pen: 'Pen (paint occupied)', eraser: 'Eraser (paint free)', restore: 'Restore (revert to _og)',
-  select: 'Select', point: 'Point', rect: 'Rect', polygon: 'Polygon', nogo: 'No-Go', waypoint: 'Waypoint',
+  select: 'Select', point: 'Point', rect: 'Rect', polygon: 'Polygon', nogo: 'No-Go',
+  waypoint: 'Waypoint', door: 'Door', measure: 'Measure (line length)',
 };
 
 // Returns [{ id, category, title, keys: string[], run }].

@@ -384,7 +384,13 @@ export function rebuildInspector() {
     const info = document.createElement('div');
     info.className = 'muted';
     const c0 = el.coords[0] || [0, 0];
-    info.textContent = `${kindOf(el)}${el.asNogo ? ' +nogo' : ''} · ${el.coords.length} pt${el.coords.length === 1 ? '' : 's'} · first (${(+c0[0]).toFixed(2)}, ${(+c0[1]).toFixed(2)}) m`;
+    let dims = '';
+    if (el.coords.length >= 2) {
+      const xs = el.coords.map(c => c[0]), ys = el.coords.map(c => c[1]);
+      const wM = Math.max(...xs) - Math.min(...xs), hM = Math.max(...ys) - Math.min(...ys);
+      dims = ` · ${wM.toFixed(2)} × ${hM.toFixed(2)} m`;
+    }
+    info.textContent = `${kindOf(el)}${el.asNogo ? ' +nogo' : ''} · ${el.coords.length} pt${el.coords.length === 1 ? '' : 's'}${dims}`;
     root.appendChild(info);
     return;
   }
