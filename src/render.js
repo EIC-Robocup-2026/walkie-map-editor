@@ -179,12 +179,18 @@ function drawElements() {
       const last = state.drawing.coords[state.drawing.coords.length - 1];
       const lp = worldToPx(last[0], last[1]);
       ctx.save();
-      ctx.setLineDash([4 / state.view.s, 4 / state.view.s]);
-      ctx.strokeStyle = state.drawing.type === 'nogo' ? '#ff4444' : '#ffeb3b';
-      ctx.lineWidth = 1 / state.view.s;
       ctx.beginPath();
       ctx.moveTo(lp.px, lp.py);
       ctx.lineTo(cursorPx.px, cursorPx.py);
+      // Solid dark underlay fills the dash gaps so the rubber-band line stays
+      // visible over white free space; bright dashes ride on top.
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 3 / state.view.s;
+      ctx.stroke();
+      ctx.setLineDash([5 / state.view.s, 4 / state.view.s]);
+      ctx.strokeStyle = state.drawing.type === 'nogo' ? '#ff5555' : '#ffea00';
+      ctx.lineWidth = 1.8 / state.view.s;
       ctx.stroke();
       ctx.restore();
     }
