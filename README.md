@@ -104,7 +104,8 @@ A dashed rubber-band line follows the cursor while drawing.
 | Tool | Click behaviour |
 |---|---|
 | Waypoint | click to place the robot's stand position, then **drag to aim its heading** (release commits) |
-| Door | mark a *physical door*: click to place, **drag to aim the passage direction**. A door is a waypoint with role pre-set to `door`; it exports to `world.toml` `[doors]` and the robot's door-opening skill engages when it's within the door's trigger radius (the dashed ring on the canvas) |
+| Door | mark a *physical door*: click to place, then **drag** — the drag **direction sets the passage heading** and the drag **distance sets the trigger radius**. A door is a waypoint with role `door`; it exports to `world.toml` `[doors]` and the robot's door-opening skill engages within the trigger radius (the dashed ring). **Resize later** by selecting the door and dragging its dashed ring (or edit `radius` in Properties). |
+| Measure | drag a line to read its **length in metres** (a gold line + label). Display-only — never exported; `Esc` clears it. |
 
 A waypoint stores a full pose `(x, y, heading)`. Select any element (Select tool
 or the sidebar list) and edit it in the sidebar **Properties** panel. For a
@@ -118,7 +119,9 @@ or the sidebar list) and edit it in the sidebar **Properties** panel. For a
   (role-aware — room names vs location names) so you pick them instead of
   mistyping, but you can still type any name (GPSR arena places are arbitrary).
 - **position** — the pose's `x` / `y` in metres, editable numerically (or drag the
-  handle / type coordinates). 
+  handle / type coordinates).
+- **size** — the area / footprint's **width × height in metres** (from the polygon
+  bounding box), shown for any place that has a drawn polygon.
 - **room** (locations only) — dropdown of your room waypoints, so the
   location→room link can never dangle.
 - **category** (locations only) — combo suggesting common categories + your

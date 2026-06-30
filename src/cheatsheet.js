@@ -14,6 +14,8 @@ const MOUSE_HINTS = [
   ['Select + drag a node handle', 'move that vertex'],
   ['Select + drag the body', 'move the whole element'],
   ['[ / ]', 'select previous / next element (and frame it)'],
+  ['Door drag', 'aim passage + set trigger radius; drag the ring to resize'],
+  ['Measure drag', 'read a line length in metres'],
   ['Double-click a list item', 'rename its label'],
   ['Drop a map folder on the canvas', 'load it'],
 ];

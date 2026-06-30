@@ -31,6 +31,7 @@
     <symbol id="ic-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9a2.6 2.6 0 1 1 3.6 2.4c-.9.4-1 1-1 1.8"/><circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none"/></symbol>
     <symbol id="ic-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M15 4v16"/></symbol>
     <symbol id="ic-ref3d" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 2v20"/><path d="M3 7l9 5 9-5"/></symbol>
+    <symbol id="ic-measure" viewBox="0 0 24 24"><path d="M3 8h18v8H3z"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/></symbol>
   </defs>
 </svg>
 
@@ -69,7 +70,11 @@
 
   <div class="grp" data-group="map">
     <button data-tool="waypoint" aria-label="Waypoint" title="Waypoint — place a named room/location for world.toml; drag to set the robot's heading"><svg class="ic"><use href="#ic-waypoint"/></svg></button>
-    <button data-tool="door" aria-label="Door" title="Door — mark a physical door for world.toml [doors]; click to place, drag to aim the passage. Dashed ring = where the robot asks to open it"><svg class="ic"><use href="#ic-door"/></svg></button>
+    <button data-tool="door" aria-label="Door" title="Door — mark a physical door for world.toml [doors]; click to place, drag to aim the passage AND set the trigger radius (drag distance). Dashed ring = where the robot asks to open it; drag the ring to resize"><svg class="ic"><use href="#ic-door"/></svg></button>
+  </div>
+
+  <div class="grp" data-group="measure">
+    <button data-tool="measure" aria-label="Measure" title="Measure — drag a line to read its length in metres (not exported)"><svg class="ic"><use href="#ic-measure"/></svg></button>
   </div>
 
   <div class="grp">
@@ -184,7 +189,10 @@
         <li>Polygon / No-Go: click vertices, click near start to close</li>
         <li>Waypoint: click to place, drag to aim heading; set role/name in the sidebar</li>
         <li><b>Right-click a waypoint</b> to aim its heading with the cursor; click to set, Esc to cancel</li>
-        <li>Esc: cancel current polygon / waypoint</li>
+        <li>Esc: cancel current polygon / waypoint / measurement</li>
+        <li>Select an area/shape to see its width × height in Properties</li>
+        <li>Door: drag sets passage heading + trigger radius; resize the ring later by dragging it</li>
+        <li>Measure tool: drag a line to read its length in metres</li>
         <li>Select tool: click an element to highlight; <b>drag a yellow node handle to move a vertex, or drag the body to move the whole shape</b> (coords show in the bar below)</li>
         <li><code>Shift</code>+<code>1…9</code>: quick-select tools (Pen, Eraser, Restore, Select, Point, Rect, Polygon, No-Go, Waypoint)</li>
         <li><b>Orig overlay</b> toolbar toggle: show the original map at 60% over your edits</li>
