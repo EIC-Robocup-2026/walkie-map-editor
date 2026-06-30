@@ -105,6 +105,13 @@ export function hitTest(wx, wy) {
     if (e.type === 'point' || e.type === 'waypoint') {
       const d = Math.hypot(pts[0][0] - wx, pts[0][1] - wy);
       if (d < tol && d < ptD) { ptD = d; pt = e.id; }
+      // A unified waypoint's boundary polygon is selectable as an area too, so a
+      // click anywhere inside the room/footprint picks it (smallest area wins).
+      if (e.type === 'waypoint' && Array.isArray(e.polygon) && e.polygon.length >= 3
+          && pointInPoly(wx, wy, e.polygon)) {
+        const a = Math.abs(polygonArea(e.polygon));
+        if (a < areaSize) { areaSize = a; area = e.id; }
+      }
     } else if (e.closed && pts.length >= 3) {
       if (pointInPoly(wx, wy, pts)) {
         const a = Math.abs(polygonArea(pts));

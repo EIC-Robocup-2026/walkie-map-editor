@@ -2,12 +2,13 @@
 // the canvas/window event listeners. Tool selection lives here too.
 'use strict';
 
-import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES } from './state.js';
+import { state, markDirty, FREE, OCC, TOOL_ORDER, TOOL_SHORTCUT_CODES, roleForType } from './state.js';
+import { canon, polygonCentroid, pointInPoly } from './pure.js';
 import { canvas, offCtx, screenToPx, screenToWorld, worldToPx } from './dom.js';
 import { draw, brushRadius } from './render.js';
 import { addElement, deleteElement, hitTest, updateElementFields, kindOf, isVisible } from './elements.js';
 import { pushUndo, undo, redoFn } from './history.js';
-import { status, rebuildElemList, rebuildInspector, currentLabel, toggleSidebar } from './ui.js';
+import { status, rebuildElemList, rebuildInspector, currentLabel, currentType, toggleSidebar } from './ui.js';
 import { defaultWaypointFields } from './io.js';
 import { openPalette, isPaletteOpen } from './palette.js';
 import { openCheatsheet, isCheatsheetOpen } from './cheatsheet.js';
@@ -24,6 +25,9 @@ let nodeDrag = null;
 // Active body drag: translate the whole element (point/line/area). `before` is the
 // coords at grab time; `moved` gates committing an undo step (vs. a plain click).
 let bodyDrag = null;
+// Heading-aim mode: right-click a waypoint to rotate its heading with the cursor.
+// `before` is the heading at grab time (for cancel + a clean undo diff).
+let aiming = null;
 
 // Index of the selected element's vertex under cursor (screen-space px), or -1.
 function nodeAt(el, p) {
@@ -112,8 +116,97 @@ function isPanTrigger(ev) {
   return ev.button === 1 || (ev.button === 0 && (ev.altKey || ev.ctrlKey || ev.metaKey));
 }
 
+// ───── Unified shape + waypoint (area always, object optional) ───────
+
+// Make `base` unique among existing waypoint names of the same role, so drawing
+// two "table" objects yields table / table_2 instead of a duplicate-key export error.
+function uniqueWaypointName(base, role) {
+  if (!base) return base;
+  const taken = new Set(state.elements
+    .filter(e => e.type === 'waypoint' && e.role === role && e.name && e.id !== undefined)
+    .map(e => canon(e.name)));
+  if (!taken.has(base)) return base;
+  let i = 2;
+  while (taken.has(`${base}_${i}`)) i++;
+  return `${base}_${i}`;
+}
+// The room whose boundary polygon contains `pt`, so a drawn object auto-links to
+// the room it sits in. '' if none.
+function roomContaining([x, y]) {
+  for (const e of state.elements) {
+    if (e.type === 'waypoint' && e.role === 'room' && Array.isArray(e.polygon)
+        && e.polygon.length >= 3 && pointInPoly(x, y, e.polygon)) return canon(e.name);
+  }
+  return '';
+}
+
+// Turn a finished drawing into an element. A closed, typed shape becomes a UNIFIED
+// waypoint (pose = polygon centroid, polygon = the drawn boundary, name = the label):
+// forced for area (→ room), optional for object (→ location). Everything else stays
+// a plain shape.
+function buildDrawnElement({ type, coords, closed, label, semType }) {
+  const wantWp = semType === 'area' || (semType === 'object' && state.objectWaypoint);
+  if (wantWp && closed && coords.length >= 3) {
+    const role = roleForType(semType);
+    const name = uniqueWaypointName(canon(label), role);
+    const centre = polygonCentroid(coords);
+    return {
+      type: 'waypoint', label: name || label, semType,
+      coords: [centre], closed: false, asNogo: false,
+      ...defaultWaypointFields({
+        role, name, polygon: coords.map(p => [...p]), present: true,
+        room: role === 'location' ? roomContaining(centre) : '',
+      }),
+    };
+  }
+  return { type, label, semType, coords, closed, asNogo: false };
+}
+
+// Add a freshly drawn element; if it's a waypoint, select it so the inspector
+// opens for naming/refining (mirrors the Waypoint tool).
+function commitDrawnElement(el) {
+  addElement(el);
+  if (el.type === 'waypoint') {
+    state.selected = el.id;
+    rebuildElemList();
+    rebuildInspector();
+    draw();
+  }
+}
+
+// Heading-aim: start (right-click a waypoint), commit (any click), cancel (Esc).
+function startAim(el) {
+  aiming = { id: el.id, before: el.heading || 0 };
+  state.selected = el.id;
+  rebuildElemList(); rebuildInspector();
+  canvas.style.cursor = 'crosshair';
+  status('aiming heading — move the cursor, click to set, Esc to cancel');
+  draw();
+}
+function commitAim() {
+  const el = aiming && state.elements.find(e => e.id === aiming.id);
+  if (el) {
+    const finalHeading = el.heading || 0;
+    el.heading = aiming.before;                          // restore for a clean undo diff
+    updateElementFields(el.id, { heading: finalHeading });  // one undoable elem-mod
+    rebuildInspector();
+    status(`heading set to ${Math.round(finalHeading * 180 / Math.PI)}°`);
+  }
+  aiming = null;
+  draw();
+}
+function cancelAim() {
+  const el = aiming && state.elements.find(e => e.id === aiming.id);
+  if (el) el.heading = aiming.before;
+  aiming = null;
+  rebuildInspector();
+  draw();
+}
+
 canvas.addEventListener('mousedown', (ev) => {
   if (!state.meta) return;
+  // While aiming a heading, any click commits it (and starts nothing else).
+  if (aiming) { ev.preventDefault(); commitAim(); return; }
   if (isPanTrigger(ev)) {
     panning = { sx: ev.clientX, sy: ev.clientY, vx: state.view.x, vy: state.view.y };
     ev.preventDefault();
@@ -129,7 +222,13 @@ canvas.addEventListener('mousedown', (ev) => {
   if (ev.button === 2) {
     if (state.drawing && (state.tool === 'polygon' || state.tool === 'nogo')) {
       finishPoly(false);
+      return;
     }
+    // Right-click a waypoint to aim its heading with the cursor.
+    const wr = screenToWorld(ev.clientX, ev.clientY);
+    const id = hitTest(wr.wx, wr.wy);
+    const el = id && state.elements.find(e => e.id === id);
+    if (el && el.type === 'waypoint') startAim(el);
     return;
   }
   if (ev.button !== 0) return;
@@ -175,16 +274,18 @@ canvas.addEventListener('mousedown', (ev) => {
       coords: [[w.wx, w.wy]], closed: false, asNogo: false, ...defaultWaypointFields({ role }) };
     draw();
   } else if (state.tool === 'point') {
-    addElement({ type: 'point', label: currentLabel(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
+    addElement({ type: 'point', label: currentLabel(), semType: currentType(), coords: [[w.wx, w.wy]], closed: false, asNogo: false });
   } else if (state.tool === 'rect') {
     // Store the fixed start corner; coords carries all 4 bbox corners so the
     // preview renders as a rectangle (closed poly) rather than a diagonal line.
-    state.drawing = { id: 'tmp', label: currentLabel(), type: 'rect', start: [w.wx, w.wy],
+    state.drawing = { id: 'tmp', label: currentLabel(), semType: currentType(), type: 'rect', start: [w.wx, w.wy],
       coords: [[w.wx, w.wy], [w.wx, w.wy], [w.wx, w.wy], [w.wx, w.wy]], closed: true, asNogo: false };
   } else if (state.tool === 'polygon' || state.tool === 'nogo') {
     if (!state.drawing) {
       const t = state.tool === 'nogo' ? 'nogo' : 'polygon';
-      state.drawing = { id: 'tmp', label: state.tool === 'nogo' ? 'no-go' : currentLabel(), type: t, coords: [[w.wx, w.wy]], closed: false, asNogo: false };
+      // No-go zones aren't an area/object — they carry no semType.
+      state.drawing = { id: 'tmp', label: state.tool === 'nogo' ? 'no-go' : currentLabel(),
+        semType: state.tool === 'nogo' ? undefined : currentType(), type: t, coords: [[w.wx, w.wy]], closed: false, asNogo: false };
     } else {
       const start = state.drawing.coords[0];
       const startPx = worldToPx(start[0], start[1]);
@@ -220,6 +321,19 @@ canvas.addEventListener('mousemove', (ev) => {
   const p = screenToPx(ev.clientX, ev.clientY);
   const w = screenToWorld(ev.clientX, ev.clientY);
   cursorPx = p;
+
+  // Aiming a heading: point the waypoint's arrow from its pose toward the cursor.
+  if (aiming) {
+    const el = state.elements.find(e => e.id === aiming.id);
+    if (el) {
+      const pos = el.coords[0] || [0, 0];
+      el.heading = Math.atan2(w.wy - pos[1], w.wx - pos[0]);   // world Y-up
+      status(`heading ${Math.round(el.heading * 180 / Math.PI)}° — click to set, Esc to cancel`);
+    }
+    canvas.style.cursor = 'crosshair';
+    draw();
+    return;
+  }
 
   // Dragging a vertex: move it live and show its world coords in the readout.
   if (nodeDrag) {
@@ -324,10 +438,10 @@ canvas.addEventListener('mouseup', (ev) => {
     state.currentStroke = null;
   }
   if (state.tool === 'rect' && state.drawing) {
-    const el = { type: 'rect', label: currentLabel(), asNogo: false,
-      coords: state.drawing.coords.map(c => [...c]), closed: true };  // already 4 bbox corners
+    const el = buildDrawnElement({ type: 'rect', coords: state.drawing.coords.map(c => [...c]),
+      closed: true, label: state.drawing.label, semType: state.drawing.semType });  // already 4 bbox corners
     state.drawing = null;
-    addElement(el);
+    commitDrawnElement(el);
   }
   if ((state.tool === 'waypoint' || state.tool === 'door') && state.drawing && state.drawing.type === 'waypoint') {
     const wp = state.drawing;
@@ -379,6 +493,7 @@ window.addEventListener('keydown', (ev) => {
     if (idx >= 0 && idx < TOOL_ORDER.length) { ev.preventDefault(); setTool(TOOL_ORDER[idx]); return; }
   }
   if (ev.key === 'Escape') {
+    if (aiming) { cancelAim(); return; }
     if (state.refMoveMode) {
       state.refMoveMode = false;
       const btn = document.querySelector('#ref-move-btn');
@@ -404,10 +519,10 @@ function finishPoly(closed) {
   if (!state.drawing) return;
   const minPts = closed ? 3 : 2;
   if (state.drawing.coords.length < minPts) { state.drawing = null; draw(); return; }
-  const el = { type: state.drawing.type, label: state.drawing.label, asNogo: false,
-    coords: state.drawing.coords, closed };
+  const el = buildDrawnElement({ type: state.drawing.type, coords: state.drawing.coords,
+    closed, label: state.drawing.label, semType: state.drawing.semType });
   state.drawing = null;
-  addElement(el);
+  commitDrawnElement(el);
 }
 
 export function setTool(t) {

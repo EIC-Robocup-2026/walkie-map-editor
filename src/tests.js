@@ -3,7 +3,7 @@
 'use strict';
 
 import {
-  writePGM, parsePGM, parseYAML, rasterPoly,
+  writePGM, parsePGM, parseYAML, rasterPoly, polygonCentroid,
   buildWorldTomlFrom, worldIssuesFrom, canon, tomlStr, splitList, normalizeVocab,
 } from './pure.js';
 
@@ -63,6 +63,12 @@ export function runSelfCheck() {
     { type: 'waypoint', role: 'door', name: 'Front', coords: [[0, 0]], heading: 0, present: true },
     { type: 'waypoint', role: 'door', name: 'front', coords: [[1, 1]], heading: 0, present: true }];
   console.assert(worldIssuesFrom(dupDoors, {}).errors.length === 1, 'colliding door names -> error');
+
+  // polygonCentroid: centre of a unit square is (0.5,0.5); degenerate falls back to mean
+  const cc = polygonCentroid([[0, 0], [1, 0], [1, 1], [0, 1]]);
+  console.assert(Math.abs(cc[0] - 0.5) < 1e-9 && Math.abs(cc[1] - 0.5) < 1e-9, 'square centroid, got ' + cc);
+  const cl = polygonCentroid([[2, 2], [4, 2]]);  // < 3 pts → midpoint
+  console.assert(cl[0] === 3 && cl[1] === 2, 'segment midpoint, got ' + cl);
 
   // vocab editor helpers
   console.assert(splitList('cola, water ,  milk ').length === 3, 'splitList trims + drops blanks');

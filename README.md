@@ -49,6 +49,39 @@ Click **Load folder** and pick a folder containing:
 - Fast mouse moves are interpolated, so a straight drag draws a continuous
   line (no gaps).
 
+**Draw type & label** — before drawing a shape, pick a **type** and a **label**:
+
+- **Type** is `area` or `object`, shown as the toolbar toggle and colour-coded
+  (area = cyan, object = amber). `area` auto-maps to a `world.toml` **room**,
+  `object` to a **location**.
+- **Label** comes from that type's managed list (the toolbar dropdown). Manage the
+  lists in the sidebar **Draw** panel — click a chip to make it active, `×` to
+  remove, or type in the add box (`+`) to add a custom label. Defaults: area =
+  `living_room`, `kitchen_room`, `bedroom`, `laundry`; object = `table`, `shelf`,
+  `chair`, `sofa`, `tv`. Custom labels persist across sessions.
+
+Each **label gets its own colour**, evenly spread within its type's family (area =
+cool cyan→blue, object = warm red→amber→yellow), so labels are individually
+distinguishable while still reading as their type at a glance. A drawn shape
+carries its label colour on the canvas and as a swatch in the element list; the
+chip dots in the Draw panel preview each label's colour. No-go zones are untyped.
+
+**Drawing an area or object makes one unified `world.toml` place.** When you draw a
+closed shape (rect or polygon) with a type:
+
+- the **drawn outline becomes the place's `polygon`** (room boundary / furniture
+  footprint), and
+- a **waypoint pose is auto-placed at the shape's centre**, named from the label
+  (auto-snake_cased, de-duplicated: `table`, `table_2`, …).
+
+`area` → a `[rooms]` entry; `object` → a `[locations]` entry. An object drawn
+inside an area auto-links its `room` to that area (point-in-polygon). The waypoint
+is **forced for areas**; for objects it's **optional** — untick *"Place a waypoint
+for objects"* in the Draw panel to draw a plain footprint instead. The new place is
+selected on creation so you can refine its name/room/heading in the **Waypoint**
+inspector; click anywhere inside its outline to re-select it. Re-draw to change the
+boundary.
+
 **Shape** — store coordinates in **world meters**, resolution-independent.
 
 | Tool | Click behaviour |
@@ -94,7 +127,11 @@ sidebar list) and fill the **Waypoint** inspector in the sidebar:
   *this* door only inside this circle. Blank = the robot's global default
   (`WALKIE_DOOR_NEAR_RADIUS_M`, 1.5 m). The dashed ring previews it.
 
-Re-aim a committed waypoint by re-drawing it with the Waypoint (or Door) tool.
+Re-aim a committed waypoint by **right-clicking it**: the heading follows the
+cursor, a click sets it, `Esc` cancels. (Works for any waypoint, including the
+room/location places created by drawing an area/object, which start at heading 0.)
+You can also re-draw it with the Waypoint (or Door) tool, or type the angle in the
+inspector.
 
 > **Door vs. `barrier`.** A `door` is a geographic point — the robot engages its
 > open-the-door routine when it's near one, on any route. The `barrier` flag on a

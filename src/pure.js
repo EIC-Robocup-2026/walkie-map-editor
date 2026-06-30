@@ -331,6 +331,27 @@ export function polygonArea(pts) {
   }
   return a / 2;
 }
+// Area-weighted polygon centroid (where the forced waypoint pose is placed when a
+// shape is drawn). Falls back to the vertex average for a degenerate (zero-area)
+// polygon, and to the single point / midpoint for < 3 vertices.
+export function polygonCentroid(pts) {
+  if (!pts || !pts.length) return [0, 0];
+  if (pts.length < 3) {
+    const n = pts.length;
+    return [pts.reduce((s, p) => s + p[0], 0) / n, pts.reduce((s, p) => s + p[1], 0) / n];
+  }
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const cross = pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
+    a += cross; cx += (pts[j][0] + pts[i][0]) * cross; cy += (pts[j][1] + pts[i][1]) * cross;
+  }
+  if (Math.abs(a) < 1e-9) {
+    const n = pts.length;
+    return [pts.reduce((s, p) => s + p[0], 0) / n, pts.reduce((s, p) => s + p[1], 0) / n];
+  }
+  a *= 0.5;
+  return [cx / (6 * a), cy / (6 * a)];
+}
 export function distToSeg(x, y, a, b) {
   const [ax, ay] = a, [bx, by] = b;
   const dx = bx - ax, dy = by - ay;

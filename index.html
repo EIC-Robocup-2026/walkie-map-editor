@@ -59,8 +59,12 @@
     <button data-tool="rect" aria-label="Rect" title="Rect — drag two corners to define a rectangle"><svg class="ic"><use href="#ic-rect"/></svg></button>
     <button data-tool="polygon" aria-label="Polygon" title="Polygon — click to add vertex, click near start to close"><svg class="ic"><use href="#ic-polygon"/></svg></button>
     <button data-tool="nogo" aria-label="No-Go" title="No-Go — closed polygon rasterized into _keepout.pgm"><svg class="ic"><use href="#ic-nogo"/></svg></button>
-    <select id="label-select" title="Label for the next shape"></select>
-    <button id="add-label" class="mini" aria-label="Add label" title="Add a custom label"><svg class="ic"><use href="#ic-add"/></svg></button>
+    <span id="type-toggle" class="type-toggle" role="group" aria-label="Draw type">
+      <button id="type-area" class="type-btn" data-type="area" title="Area — a room boundary; exports to world.toml [rooms]">Area</button>
+      <button id="type-object" class="type-btn" data-type="object" title="Object — furniture; exports to world.toml [locations]">Object</button>
+    </span>
+    <select id="label-select" title="Label for the next shape (from the active type's list)"></select>
+    <button id="add-label" class="mini" aria-label="Add label" title="Add a custom label to the active type"><svg class="ic"><use href="#ic-add"/></svg></button>
   </div>
 
   <div class="grp" data-group="map">
@@ -127,6 +131,11 @@
       </div>
     </details>
 
+    <details open id="draw-panel">
+      <summary>Draw <span class="count">— type &amp; labels</span></summary>
+      <div id="draw-settings" class="draw-settings"></div>
+    </details>
+
     <details open>
       <summary>Elements <span class="count">(<span id="elem-count">0</span>)</span>
         <button id="clear-elems" class="mini" title="Delete all elements">clear</button>
@@ -173,6 +182,7 @@
         <li>Middle / Alt / Ctrl + drag: pan</li>
         <li>Polygon / No-Go: click vertices, click near start to close</li>
         <li>Waypoint: click to place, drag to aim heading; set role/name in the sidebar</li>
+        <li><b>Right-click a waypoint</b> to aim its heading with the cursor; click to set, Esc to cancel</li>
         <li>Esc: cancel current polygon / waypoint</li>
         <li>Select tool: click an element to highlight; <b>drag a yellow node handle to move a vertex, or drag the body to move the whole shape</b> (coords show in the bar below)</li>
         <li><code>Shift</code>+<code>1…9</code>: quick-select tools (Pen, Eraser, Restore, Select, Point, Rect, Polygon, No-Go, Waypoint)</li>

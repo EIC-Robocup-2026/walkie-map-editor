@@ -184,3 +184,46 @@ body.sidebar-collapsed #status { right: 0; }
   #status { right: 220px; }
   body.sidebar-collapsed #status { right: 0; }
 }
+
+/* ───── Structured draw model: type toggle + label settings ───────── */
+/* Toolbar Area/Object segmented toggle. --type-col is set per button in JS. */
+.type-toggle { display: inline-flex; border: 1px solid #555; border-radius: 4px; overflow: hidden; }
+#toolbar .type-toggle .type-btn {
+  height: 28px; min-width: 0; padding: 0 10px; border: none; border-radius: 0;
+  background: #333; color: #aaa; font-size: 12px; border-left: 1px solid #555;
+}
+#toolbar .type-toggle .type-btn:first-child { border-left: none; }
+#toolbar .type-toggle .type-btn:hover { background: #444; color: #ddd; }
+#toolbar .type-toggle .type-btn.active {
+  background: color-mix(in oklab, var(--type-col) 22%, #222);
+  color: #fff; box-shadow: inset 0 -2px 0 var(--type-col);
+}
+
+/* Sidebar Draw panel: per-type label chips + add row. */
+.draw-settings { display: flex; flex-direction: column; gap: 8px; }
+.draw-type { border: 1px solid #3a3a3a; border-left: 3px solid var(--type-col); border-radius: 4px; padding: 6px; }
+.draw-type.active { background: color-mix(in oklab, var(--type-col) 9%, transparent); }
+.draw-type-head {
+  display: flex; align-items: center; gap: 6px; width: 100%; background: none;
+  border: none; padding: 2px; color: #ddd; text-transform: capitalize; font-weight: 600;
+}
+.draw-type-head:hover { background: none; color: #fff; }
+.draw-type-head .muted { margin-left: auto; font-weight: 400; text-transform: none; }
+.type-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--type-col); flex-shrink: 0; }
+.chip-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 6px;
+  background: #2f2f2f; border: 1px solid #4a4a4a; border-radius: 12px; font-size: 11px;
+}
+.chip.sel { border-color: var(--label-col); background: color-mix(in oklab, var(--label-col) 20%, #2f2f2f); color: #fff; }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--label-col); flex-shrink: 0; }
+.chip-t { cursor: pointer; }
+.chip-x { background: none; border: none; color: #999; padding: 0 2px; font-size: 13px; line-height: 1; }
+.chip-x:hover { background: none; color: #f88; }
+.chip-add { display: flex; gap: 4px; }
+.chip-add input { flex: 1; min-width: 0; background: #222; color: #ddd; border: 1px solid #4a4a4a; border-radius: 3px; padding: 2px 6px; font: inherit; font-size: 11px; }
+
+/* Element-list type swatch */
+.type-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.draw-wp-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb; padding: 2px; cursor: pointer; }
+.draw-wp-row input { margin: 0; }

@@ -5,6 +5,62 @@
 'use strict';
 
 export const DEFAULT_LABELS = ['table', 'shelf', 'chair', 'sofa', 'tv', 'food', 'drink'];
+
+// ───── Structured draw model (type → label) ─────────────────────────
+// Every drawn shape is tagged with a semantic TYPE and a LABEL from that type's
+// managed list (instead of one free-text label). The type auto-maps to a
+// world.toml role when a waypoint is bound (area → room, object → location).
+export const LABEL_TYPES = ['area', 'object'];
+export const DEFAULT_LABEL_SETS = {
+  area: ['living_room', 'kitchen_room', 'bedroom', 'laundry'],
+  object: ['table', 'shelf', 'chair', 'sofa', 'tv'],
+};
+// Per-type colour tag. Picked to stay legible over BOTH free (white) and occupied
+// (black) map pixels; refined in the colour-overhaul feature.
+export const TYPE_COLORS = { area: '#22d3ee', object: '#f59e0b' };
+export const TYPE_FILLS = { area: 'rgba(34,211,238,0.15)', object: 'rgba(245,158,11,0.15)' };
+// area → [rooms], object → [locations] (the rulebook auto-map).
+export const roleForType = (t) => (t === 'area' ? 'room' : t === 'object' ? 'location' : '');
+
+// Per-LABEL colour, clustered inside its TYPE's hue band so every area reads as
+// one family (cyan→teal→blue) and every object as another (amber→orange→yellow),
+// while each label is still individually distinguishable. The type theme
+// (TYPE_COLORS) stays the section/toggle accent; labels get these derived hues.
+const TYPE_HUE = { area: 195, object: 35 };  // base hue of the cyan / amber theme
+const HUE_BAND = 72;                          // total spread (±36°) around the base
+const GOLDEN = 0.61803398875;                 // golden ratio → quasi-uniform spread
+function _hash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < String(s).length; i++) { h ^= String(s).charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+// Stable fraction in [0,1) for a string (hash fallback for labels not in a set).
+function _frac(s) { return (_hash(s) * GOLDEN) % 1; }
+// Deterministic HSL for (type,label): hue inside the type band, saturated and
+// mid-light so it stays legible over both white (free) and black (occupied) pixels.
+// Labels in the type's list get EVENLY-SPACED hues (guaranteed distinct); a label
+// not in the list (e.g. a freely renamed shape) falls back to a stable hash hue.
+export function labelHsl(type, label) {
+  const base = TYPE_HUE[type];
+  if (base == null) return { h: 0, s: 0, l: 80 };  // untyped → neutral grey
+  const set = (state.labelSets && state.labelSets[type]) || [];
+  const i = set.indexOf(label), n = set.length;
+  const frac = i < 0 ? _frac(label || '') : n > 1 ? i / (n - 1) : 0.5;
+  const hue = (((base - HUE_BAND / 2 + frac * HUE_BAND) % 360) + 360) % 360;
+  const l = i < 0 ? 60 : (i % 2 ? 64 : 56);  // zig-zag lightness for extra separation
+  return { h: Math.round(hue), s: 82, l };
+}
+export function colorForLabel(type, label) {
+  if (type == null) return '#22d3ee';
+  const { h, s, l } = labelHsl(type, label);
+  return `hsl(${h}, ${s}%, ${l}%)`;
+}
+export function fillForLabel(type, label) {
+  if (type == null) return 'rgba(34,211,238,0.15)';
+  const { h, s, l } = labelHsl(type, label);
+  return `hsla(${h}, ${s}%, ${l}%, 0.15)`;
+}
+
 export const FREE = 254, OCC = 0;
 export const KIND_LABELS = { point: 'point', rect: 'rect', polygon: 'polygon', nogo: 'no-go', waypoint: 'waypoint' };
 // Default heading-arrow length on screen (px); world direction, y-flipped to canvas.
@@ -44,6 +100,14 @@ export const state = {
   prefix: 'map',
   elements: [],
   labels: DEFAULT_LABELS.slice(),
+  // Structured draw selection: managed label list per type, the active type, and
+  // the remembered active label per type (so switching type restores its label).
+  labelSets: { area: DEFAULT_LABEL_SETS.area.slice(), object: DEFAULT_LABEL_SETS.object.slice() },
+  activeType: 'area',
+  activeLabel: { area: DEFAULT_LABEL_SETS.area[0], object: DEFAULT_LABEL_SETS.object[0] },
+  // Whether drawing an OBJECT also creates a location waypoint at the shape's
+  // centre (areas always do — the waypoint is forced for area, optional for object).
+  objectWaypoint: true,
   // Non-spatial arena vocabulary for walkie-agent-v2's GPSR world.toml.
   vocab: { object_categories: {}, names: [], gestures: {} },
   selected: null,
