@@ -50,6 +50,12 @@ export function runSelfCheck() {
   console.assert(/\[gestures\.waving\]/.test(toml), 'gestures table');
   console.assert(canon('the Kitchen Table') === 'the_kitchen_table', 'canon');
 
+  // optional Z height: exported as `z` in a location's inline table only when set
+  const wpLocZ = { type: 'waypoint', role: 'location', name: 'shelf', coords: [[1, 1]], heading: 0, polygon: [], z: 0.75, present: true };
+  const tomlZ = buildWorldTomlFrom([wpLocZ], {});
+  console.assert(/shelf\s+= \{[^}]*z = 0\.75/.test(tomlZ), 'location z height exported, got:\n' + tomlZ);
+  console.assert(!/z = /.test(buildWorldTomlFrom([{ ...wpLocZ, z: null }], {})), 'no z line when unset');
+
   // doors -> [doors] inline tables; pose carries heading_rad + polygon; radius only when set
   const wpDoor = { type: 'waypoint', role: 'door', name: 'Entrance Door', heading: 1.5708,
     coords: [[2.0, 1.0]], polygon: [[1.5, 0.5], [2.5, 0.5], [2.5, 1.5], [1.5, 1.5]], radius: 1.2, present: true };

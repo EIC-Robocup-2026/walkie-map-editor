@@ -187,6 +187,7 @@ export function buildWorldTomlFrom(elements, vocab) {
     if (e.placement) pairs.push(['placement', 'true']);
     if (canon(e.category)) pairs.push(['category', tomlStr(canon(e.category))]);
     pairs.push(['pose', poseToToml(e)], ['polygon', polyToToml(e.polygon)]);
+    if (e.z != null && Number.isFinite(+e.z)) pairs.push(['z', fmtNum(e.z)]);  // optional surface height (m)
     if (e.aliases && e.aliases.length) pairs.push(['aliases', tomlStrArray(e.aliases)]);
     if (e.barrier) pairs.push(['barrier', 'true']);
     if (!e.present) pairs.push(['present', 'false']);
